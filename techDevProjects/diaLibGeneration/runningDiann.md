@@ -1,0 +1,22 @@
+## Running diann for lib generation
+
+The goal of this project is to optimize library generation from DIA-NN such that we can use a standard library to help our analysis. I ran our MB231 standard cell lysate using a GPF setup covering a range of 430-930mz across a total of 10 files (50mz for each file). Now I want to process these into a spectral library using DIA-NN. To do this, I will call it from Linux. 
+
+```shell
+##execute diann
+./mnt/e/softwareTools/fragpipe-jre-211/tools/diann/1.8.2_beta_8/linux/diann-1.8.1.8 --f "/mnt/d/bmsProjects/diaTesting/231220_mb231Standard_1in20_2uLInject_75umBy25cmWith2umC18_gpf1.mzML" --f "/mnt/d/bmsProjects/diaTesting/231220_mb231Standard_1in20_2uLInject_75umBy25cmWith2umC18_gpf2.mzML" --f "/mnt/d/bmsProjects/diaTesting/231220_mb231Standard_1in20_2uLInject_75umBy25cmWith2umC18_gpf3.mzML" --f "/mnt/d/bmsProjects/diaTesting/231220_mb231Standard_1in20_2uLInject_75umBy25cmWith2umC18_gpf4.mzML" --f "/mnt/d/bmsProjects/diaTesting/231220_mb231Standard_1in20_2uLInject_75umBy25cmWith2umC18_gpf5.mzML" --f "/mnt/d/bmsProjects/diaTesting/231220_mb231Standard_1in20_2uLInject_75umBy25cmWith2umC18_gpf6.mzML" --f "/mnt/d/bmsProjects/diaTesting/231220_mb231Standard_1in20_2uLInject_75umBy25cmWith2umC18_gpf7.mzML" --f "/mnt/d/bmsProjects/diaTesting/231220_mb231Standard_1in20_2uLInject_75umBy25cmWith2umC18_gpf8.mzML" --f "/mnt/d/bmsProjects/diaTesting/231220_mb231Standard_1in20_2uLInject_75umBy25cmWith2umC18_gpf9.mzML" --f "/mnt/d/bmsProjects/diaTesting/231220_mb231Standard_1in20_2uLInject_75umBy25cmWith2umC18_gpf10.mzML" --lib "" --threads 28 --verbose 1 --out "/mnt/d/bmsProjects/diaTesting/libGeneration/libGenerate.tsv" --qvalue 0.01 --matrices  --out-lib "/mnt/d/bmsProjects/diaTesting/libGeneration/gpfMb231HumanSpecLib.tsv" --gen-spec-lib --predictor --fasta "/mnt/d/bmsProjects/diaTesting/uniprotkb_proteome_UP000005640_AND_revi_2024_01_15.fasta" --fasta-search --min-fr-mz 200 --max-fr-mz 1800 --met-excision --cut K*,R* --missed-cleavages 1 --min-pep-len 7 --max-pep-len 30 --min-pr-mz 430 --max-pr-mz 930 --min-pr-charge 2 --max-pr-charge 4 --unimod4 --var-mods 1 --var-mod UniMod:35,15.994915,M --var-mod UniMod:1,42.010565,*n --monitor-mod UniMod:1 --individual-mass-acc --individual-windows --rt-profiling --peak-center --no-ifs-removal
+
+```
+
+Do this using a shell script, as below.
+
+```shell
+#!/bin/bash
+diannLocation="/mnt/e/softwareTools/fragpipe-jre-211/tools/diann/1.8.2_beta_8/linux/diann-1.8.1.8"
+baseProjectLocation="/mnt/d/bmsProjects/diaTesting/"
+
+##run diann
+printf "processing diann analysis"
+eval $diannLocation --f "${baseProjectLocation}231220_mb231Standard_1in20_2uLInject_75umBy25cmWith2umC18_gpf1.mzML" --f "${baseProjectLocation}231220_mb231Standard_1in20_2uLInject_75umBy25cmWith2umC18_gpf2.mzML" --f "/${baseProjectLocation}231220_mb231Standard_1in20_2uLInject_75umBy25cmWith2umC18_gpf3.mzML" --f "${baseProjectLocation}231220_mb231Standard_1in20_2uLInject_75umBy25cmWith2umC18_gpf4.mzML" --f "${baseProjectLocation}231220_mb231Standard_1in20_2uLInject_75umBy25cmWith2umC18_gpf5.mzML" --f "${baseProjectLocation}231220_mb231Standard_1in20_2uLInject_75umBy25cmWith2umC18_gpf6.mzML" --f "${baseProjectLocation}231220_mb231Standard_1in20_2uLInject_75umBy25cmWith2umC18_gpf7.mzML" --f "${baseProjectLocation}231220_mb231Standard_1in20_2uLInject_75umBy25cmWith2umC18_gpf8.mzML" --f "${baseProjectLocation}231220_mb231Standard_1in20_2uLInject_75umBy25cmWith2umC18_gpf9.mzML" --f "${baseProjectLocation}231220_mb231Standard_1in20_2uLInject_75umBy25cmWith2umC18_gpf10.mzML" --lib "" --threads 28 --verbose 1 --out "${baseProjectLocation}libGeneration/libGenerate.tsv" --qvalue 0.01 --matrices  --out-lib "${baseProjectLocation}libGeneration/gpfMb231HumanSpecLib.tsv" --gen-spec-lib --predictor --fasta "${baseProjectLocation}uniprotkb_proteome_UP000005640_AND_revi_2024_01_15.fasta" --fasta-search --min-fr-mz 200 --max-fr-mz 1800 --met-excision --cut K*,R* --missed-cleavages 1 --min-pep-len 7 --max-pep-len 30 --min-pr-mz 430 --max-pr-mz 930 --min-pr-charge 2 --max-pr-charge 4 --unimod4 --var-mods 1 --var-mod UniMod:35,15.994915,M --var-mod UniMod:1,42.010565,*n --monitor-mod UniMod:1 --individual-mass-acc --individual-windows --rt-profiling --peak-center --no-ifs-removal
+
+```
