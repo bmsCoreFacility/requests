@@ -1,0 +1,160 @@
+---
+title: "diannDataProcessing"
+author: "Christopher Hughes"
+format: html
+editor: visual
+---
+
+## Details
+
+This document describes processing of proteomics data from DIANN to compile a final protein set.
+
+## Setting up the environment
+
+These are packages you will need for this notebook. For exact versions used, please refer to the session info at the bottom of this notebook.
+
+```{r}
+#| message: false
+#| warning: false
+##########################################################################################
+library('tidyverse')
+library('iq')
+library('DEqMS')
+library('RColorBrewer')
+library('ggrepel')
+```
+
+I want to set a base directory that we can use as a working space.
+
+```{r}
+##########################################################################################
+baseRepository = 'D:/requests/231213_1172/project_6tg'
+```
+
+## Data processing
+
+Read in data from DIA-NN and process with the IQ package.
+
+```{r}
+##########################################################################################
+##first we can filter and parse the report data into a better format for IQ
+raw = read_tsv(paste(baseRepository, '/combinedFilteredReport.tsv',sep=''), show_col_types = FALSE) %>%
+  dplyr::mutate(File.Name = sub('.*240112_231213_1172_(.*)_dia[123]\\.mzML', '\\1', File.Name)) %>%
+  dplyr::filter(!is.na(Genes) & !grepl(';', Protein.Group))
+
+##save the data
+write.table(raw, paste(baseRepository,'/combinedFilteredReportAnnotated.tsv',sep=''), 
+            col.names = TRUE, row.names = FALSE, quote = FALSE, sep = '\t')
+
+
+##run the IQ analysis
+iqResult = process_long_format(paste(baseRepository,'/combinedFilteredReportAnnotated.tsv',sep=''), 
+                           output_filename = paste(baseRepository,'/combinedFilteredReportAnnotatedIq.tsv',sep=''),
+                           annotation_col = 'Genes',
+                           normalization = 'median',
+                           filter_double_less = c("Lib.Q.Value" = "0.01", "Lib.PG.Q.Value" = "0.01"),
+                           peptide_extractor = function(x) gsub("[0-9].*$", "", x))
+
+##parse the IQ result
+proData = read_tsv(paste(baseRepository,'/combinedFilteredReportAnnotatedIq.tsv',sep=''), show_col_types = FALSE) %>%
+  dplyr::rename(accession = 'Protein.Group',
+                symbol = 'Genes')
+
+
+##save the data
+saveRDS(proData, paste(baseRepository, '/parsedProteinData.rds', sep = ''))
+write.table(proData, paste(baseRepository, '/parsedProteinData.tsv', sep = ''), 
+            col.names = TRUE, row.names = FALSE, quote = FALSE, sep = '\t')
+```
+
+Perform differential expression analysis on these data.
+
+```{r}
+##########################################################################################
+##I am going to do one-by-one comparisons
+processedData = readRDS(paste(baseRepository, '/parsedProteinData.rds', sep = ''))
+conditionsToCompare = c('6TG')
+controlCondition = 'DMSO'
+for (i in 1:length(conditionsToCompare)){
+  dat = processedData[,c(1:2, 
+                         which(names(processedData) == paste(controlCondition, '_repA', sep = '')),
+                         which(names(processedData) == paste(controlCondition, '_repB', sep = '')),
+                         which(names(processedData) == paste(controlCondition, '_repC', sep = '')),
+                         which(names(processedData) == paste(conditionsToCompare[i], '_repA', sep = '')),
+                         which(names(processedData) == paste(conditionsToCompare[i], '_repB', sep = '')),
+                         which(names(processedData) == paste(conditionsToCompare[i], '_repC', sep = '')))]
+  dat$samples123 = rowSums(is.na(dat[,3:5]))
+  dat$samples456 = rowSums(is.na(dat[,6:8]))
+  colnames(dat)[3:5] = c('cont_rep1','cont_rep2','cont_rep3')
+  colnames(dat)[6:8] = c('treat_rep1','treat_rep2','treat_rep3')
+  #
+  datFiltered = as.data.frame(dat) %>%
+    dplyr::filter(samples123 < 1 | samples456 < 1) %>%
+    dplyr::mutate(cont_rep1 = ifelse(samples123 == 3, min(cont_rep1, na.rm = TRUE), cont_rep1),
+                  cont_rep2 = ifelse(samples123 == 3, min(cont_rep2, na.rm = TRUE), cont_rep2),
+                  cont_rep3 = ifelse(samples123 == 3, min(cont_rep3, na.rm = TRUE), cont_rep3)) %>%
+    dplyr::mutate(treat_rep1 = ifelse(samples456 == 3, min(treat_rep1, na.rm = TRUE), treat_rep1),
+                  treat_rep2 = ifelse(samples456 == 3, min(treat_rep2, na.rm = TRUE), treat_rep2),
+                  treat_rep3 = ifelse(samples456 == 3, min(treat_rep3, na.rm = TRUE), treat_rep3)) %>%
+    dplyr::select(-samples123, -samples456)
+  #
+  rownames(datFiltered) = datFiltered$accession
+  dat.log = datFiltered %>%
+    dplyr::select(-accession, -symbol)
+  #dat.log = na.omit(datFiltered)
+  #boxplot(dat.log, las = 2, main = 'total protein abundance')
+  
+  ##make a design table
+  cond = as.factor(c(rep('cont',3),
+                    rep('treat',3)))
+  design = model.matrix(~0+cond)
+  colnames(design) = gsub('cond', '', colnames(design))
+  
+  ##make the contrasts
+  x = c('treat-cont')
+  contrast = makeContrasts(contrasts = x, levels = design)
+  fit1 = lmFit(dat.log, design)
+  fit2 = contrasts.fit(fit1, contrasts = contrast)
+  fit3 = eBayes(fit2)
+
+  ##add information about PSM counts
+  forPsm = processedData
+  psm.count.table = data.frame(count = forPsm$n_peptides,
+                               row.names = forPsm$accession)
+  fit3$count = psm.count.table[rownames(fit3$coefficients),'count']
+  fit4 = spectraCounteBayes(fit3)
+  #VarianceBoxplot(fit4, n = 30, main = 'total proteome dataset', xlab = 'psm count')
+  #VarianceScatterplot(fit4, main = 'total proteome dataset')
+  
+  ##extract the data
+  #head(fit4$coefficients)
+  toAnnotate = forPsm[,1:4]
+  deqmsResults = tibble(outputResult(fit4, coef_col = 1)) %>%
+    dplyr::rename(accession = 'gene') %>%
+    dplyr::left_join(toAnnotate)
+  #
+  saveRDS(deqmsResults, paste(baseRepository, '/dataset_deqms_', conditionsToCompare[i], '-', controlCondition, '.rds', sep = ''))
+  write.table(deqmsResults, paste(baseRepository, '/dataset_deqms_', conditionsToCompare[i], '-', controlCondition, '.tsv', sep = ''),
+              col.names = TRUE, row.names = FALSE, sep = '\t', quote = FALSE)
+  
+  ##create a plot of the data
+  #create the plot and save it
+  goi = c('YBX1')
+  plotData = deqmsResults %>%
+    dplyr::mutate(pColors = ifelse(logFC > 0.5, brewer.pal(4,'OrRd')[4],
+                                   ifelse(logFC < -0.5, brewer.pal(4,'GnBu')[4], brewer.pal(3,'Greys')[2]))) %>%
+    dplyr::mutate(pText = ifelse(symbol %in% goi, symbol, ''))
+  #
+  ggplot(plotData, aes(logFC, -log10(sca.P.Value))) +
+    geom_point(size = 0.5, color = plotData$pColors) +
+    labs(x = paste('log2(',conditionsToCompare[i],'-',controlCondition,')',sep=''), y = '-log10(p-value)', title = 'Differential abundance') +
+    #geom_text_repel(label = plotData$pText, min.segment.length = unit(0, 'lines'), nudge_x = 1, nudge_y = 1, max.overlaps = 55000, size = 2, segment.size = 0.25) +
+    scale_x_continuous(limits = c(-6,6), breaks = seq(-20,20,2)) +
+    scale_y_continuous(limits = c(0,20), breaks = seq(0,60,5)) +
+    geom_vline(xintercept = c(-0.5,0.5), linetype = 'dashed') +
+    geom_hline(yintercept = -log10(0.01), linetype = 'dashed') +
+    theme_classic()
+  ggsave(paste(baseRepository, '/scatter_deqms_', conditionsToCompare[i], '-', controlCondition, '.pdf', sep = ''),
+         height = 2, width = 2, useDingbats = FALSE)
+}
+```
