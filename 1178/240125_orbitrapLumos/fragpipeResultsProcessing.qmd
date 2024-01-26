@@ -1,0 +1,77 @@
+---
+title: "Fragpipe Results Processing"
+author: "Christopher Hughes"
+format: html
+editor: visual
+---
+
+## Details
+
+This document describes processing of proteomics data from Fragpipe to compile a final protein set.
+
+## Setting up the environment
+
+These are packages you will need for this notebook. For exact versions used, please refer to the session info at the bottom of this notebook.
+
+```{r}
+#| message: false
+#| warning: false
+##########################################################################################
+library('tidyverse')
+```
+
+I want to set a base directory that we can use as a working space.
+
+```{r}
+##########################################################################################
+baseRepository = 'D:/requests/1178/240125_orbitrapLumos'
+```
+
+## Data processing
+
+Read in data from DIA-NN and process with the IQ package.
+
+```{r}
+##########################################################################################
+##compile the list of directory paths
+folderNames = c('fragpipeSample1','fragpipeSample2','fragpipeSample3','fragpipeSample4')
+
+
+##process through the files
+for (i in 1:length(folderNames)){
+  #
+  rawTemp = read_tsv(paste(baseRepository,'/', folderNames[i], '/protein.tsv',sep=''),show_col_types = FALSE) %>%
+    dplyr::select("Protein ID":"Length", "Coverage", "Protein Probability", "Total Peptides":"Razor Spectral Count") %>%
+    dplyr::rename(accession  = "Protein ID",
+                  uniprot = "Entry Name",
+                  gene = "Gene",
+                  length = "Length",
+                  percentCoverage = "Coverage",
+                  proteinProbability = "Protein Probability",
+                  totalPeptides = "Total Peptides",
+                  uniquePeptides = "Unique Peptides",
+                  razorPeptides = "Razor Peptides",
+                  totalSpectralCount = "Total Spectral Count",
+                  uniqueSpectralCount = "Unique Spectral Count",
+                  razorSpectralCount = "Razor Spectral Count") %>%
+    dplyr::arrange(-totalSpectralCount)
+  #
+  saveRDS(rawTemp, paste(baseRepository,'/', folderNames[i], '/proteinProcessed.rds',sep=''))
+  write.table(rawTemp, paste(baseRepository,'/', folderNames[i], '/proteinProcessed.tsv',sep=''),
+              col.names = TRUE, row.names = FALSE, quote = FALSE, sep = '\t')
+}
+
+```
+
+Done.
+
+## Session info
+
+```{r}
+##########################################################################################
+##session info
+sessionInfo()
+```
+
+
+
