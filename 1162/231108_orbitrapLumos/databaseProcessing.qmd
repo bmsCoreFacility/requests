@@ -1,0 +1,63 @@
+---
+title: "databaseProcessing"
+author: "Christopher Hughes"
+format: html
+editor: visual
+---
+
+## Details
+
+This document describes processing a database file to work with Philosopher.
+
+## Setting up the environment
+
+These are packages you will need for this notebook. For exact versions used, please refer to the session info at the bottom of this notebook.
+
+```{r}
+#| message: false
+#| warning: false
+##########################################################################################
+library('tidyverse')
+library('Biostrings')
+```
+
+I want to set a base directory that we can use for our analysis.
+
+```{r}
+##########################################################################################
+baseRepository = 'D:/requests/231108_1162'
+```
+
+## Data processing
+
+Process the fasta database.
+
+```{r}
+##########################################################################################
+fastaDb = readAAStringSet(paste(baseRepository,'/databasePreparation/ncbiScomberJaponicus_20231219.fasta',sep=''))
+
+##define an index for each entry
+fastaIndex = tibble('metadata' = names(fastaDb)) %>%
+  mutate(accession = paste('P',seq(1,nrow(.),1),sep=''))
+
+##save the fasta index for use later on
+saveRDS(fastaIndex, paste(baseRepository,'/databasePreparation/ncbiScomberJaponicusAccessionCorrected_20231219.rds',sep=''))
+
+##edit the fastadb names
+fastaDbEdited = fastaDb
+names(fastaDbEdited) = fastaIndex$accession
+
+##write the new fasta database
+writeXStringSet(fastaDbEdited, paste(baseRepository,'/databasePreparation/ncbiScomberJaponicusAccessionCorrected_20231219.fasta',sep=''))
+```
+
+
+
+## Session info
+
+```{r}
+##########################################################################################
+sessionInfo()
+```
+
+

@@ -24,7 +24,7 @@ I want to set a base directory that we can use for our analysis.
 
 ```{r}
 ##########################################################################################
-baseRepository = 'D:/requests/1162/240126_orbitrapLumos'
+baseRepository = 'D:/requests/231108_1162'
 ```
 
 ## Data processing
@@ -34,10 +34,10 @@ Process the FragPipe data for the first sample.
 ```{r}
 ##########################################################################################
 ##read in the fasta index file
-fastaIndex = readRDS(paste(baseRepository,'/databasePreparation/ncbiSalmoSalarProteinAccessionCorrected_202401.rds',sep=''))
+fastaIndex = readRDS(paste(baseRepository,'/databasePreparation/ncbiScomberJaponicusAccessionCorrected_20231219.rds',sep=''))
 
 ##read in the protein result file
-pro = read_tsv(paste(baseRepository,'/fragpipeNcbiSample3/protein.tsv',sep=''),
+pro = read_tsv(paste(baseRepository,'/fragpipeBand1/protein.tsv',sep=''),
                show_col_types = FALSE) %>%
   dplyr::select(Protein, Length, Coverage, `Protein Probability`, `Total Peptides`:`Indistinguishable Proteins`) %>%
   dplyr::rename(accession = 'Protein',
@@ -60,7 +60,7 @@ pro = read_tsv(paste(baseRepository,'/fragpipeNcbiSample3/protein.tsv',sep=''),
   dplyr::arrange(-totalSpectralCount)
 
 ##save the file
-write.table(pro, paste(baseRepository,'/fragpipeNcbiSample3/proteinProcessed.tsv',sep=''),
+write.table(pro, paste(baseRepository,'/fragpipeBand1/proteinProcessed.tsv',sep=''),
             quote = FALSE, sep = '\t', col.names = TRUE, row.names = FALSE)
 ```
 
@@ -69,10 +69,10 @@ Process the FragPipe data for the second sample.
 ```{r}
 ##########################################################################################
 ##read in the fasta index file
-fastaIndex = readRDS(paste(baseRepository,'/databasePreparation/ncbiSalmoSalarProteinAccessionCorrected_202401.rds',sep=''))
+fastaIndex = readRDS(paste(baseRepository,'/databasePreparation/ncbiScomberJaponicusAccessionCorrected_20231219.rds',sep=''))
 
 ##read in the protein result file
-pro = read_tsv(paste(baseRepository,'/fragpipeNcbiSample4/protein.tsv',sep=''),
+pro = read_tsv(paste(baseRepository,'/fragpipeBand2/protein.tsv',sep=''),
                show_col_types = FALSE) %>%
   dplyr::select(Protein, Length, Coverage, `Protein Probability`, `Total Peptides`:`Indistinguishable Proteins`) %>%
   dplyr::rename(accession = 'Protein',
@@ -95,9 +95,10 @@ pro = read_tsv(paste(baseRepository,'/fragpipeNcbiSample4/protein.tsv',sep=''),
   dplyr::arrange(-totalSpectralCount)
 
 ##save the file
-write.table(pro, paste(baseRepository,'/fragpipeNcbiSample4/proteinProcessed.tsv',sep=''),
+write.table(pro, paste(baseRepository,'/fragpipeBand2/proteinProcessed.tsv',sep=''),
             quote = FALSE, sep = '\t', col.names = TRUE, row.names = FALSE)
 ```
+
 
 ## Session info
 
