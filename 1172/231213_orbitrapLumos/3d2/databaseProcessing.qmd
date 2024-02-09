@@ -1,0 +1,81 @@
+---
+title: "databaseProcessing"
+author: "Christopher Hughes"
+format: html
+editor: visual
+---
+
+## Details
+
+This document describes processing a database file to so that we can combine it with a human database for processing with DIANN.
+
+## Setting up the environment
+
+These are packages you will need for this notebook. For exact versions used, please refer to the session info at the bottom of this notebook.
+
+```{r}
+#| message: false
+#| warning: false
+##########################################################################################
+library('tidyverse')
+library('Biostrings')
+```
+
+I want to set a base directory that we can use for our analysis.
+
+```{r}
+##########################################################################################
+baseRepository = 'D:/requests/231213_1172/project_3d2'
+```
+
+## Data processing
+
+Process the virus fasta database.
+
+```{r}
+##########################################################################################
+fastaDb = readAAStringSet(paste(baseRepository,'/ncbiProtein_GQ994935.1_jan2024.fasta',sep=''))
+
+##define an index for each entry
+fastaIndex = tibble('metadata' = names(fastaDb)) %>%
+  mutate(accession = paste('sp|', sub('(.*)\\.[1] [KO].*','\\1', metadata), '|VIRUS', seq(1,nrow(.),1), '_HUMAN ', 'GN=VIRUS', seq(1,nrow(.),1), sep=''))
+
+##save the fasta index for use later on
+saveRDS(fastaIndex, paste(baseRepository,'/ncbiViralDatabaseIndex.rds',sep=''))
+
+##edit the fastadb names
+fastaDbEdited = fastaDb
+names(fastaDbEdited) = fastaIndex$accession
+
+##write the new fasta database
+writeXStringSet(fastaDbEdited, paste(baseRepository,'/ncbiViralDatabaseReannotated.fasta',sep=''))
+```
+
+Process the crap database.
+
+```{r}
+##########################################################################################
+fastaDb = readAAStringSet(paste(baseRepository,'/crap_2024_01_15.fasta',sep=''))
+
+##define an index for each entry
+fastaIndex = tibble('metadata' = names(fastaDb)) %>%
+  dplyr::mutate(accession = paste('sp|CONT', seq(1,nrow(.),1), '|', sub('sp\\|(.*)\\|','\\1', metadata), ' GN=', sub('sp\\|(.*)_.*','\\1', metadata), sep=''))
+
+##save the fasta index for use later on
+saveRDS(fastaIndex, paste(baseRepository,'/crap_2024_01_15_Index.rds',sep=''))
+
+##edit the fastadb names
+fastaDbEdited = fastaDb
+names(fastaDbEdited) = fastaIndex$accession
+toKeep = data.frame(name = names(fastaDbEdited)[which(!grepl('HUMAN', names(fastaDbEdited)))])
+
+##write the new fasta database
+writeXStringSet(fastaDbEdited[toKeep$name], paste(baseRepository,'/crapDatabaseReannotated.fasta',sep=''))
+```
+
+## Session info
+
+```{r}
+##########################################################################################
+sessionInfo()
+```
