@@ -1,0 +1,75 @@
+---
+title: "fragpipeOutputProcessing"
+author: "Christopher Hughes"
+format: html
+editor: visual
+---
+
+## Details
+
+This document describes processing the output from FragPipe.
+
+## Setting up the environment
+
+These are packages you will need for this notebook. For exact versions used, please refer to the session info at the bottom of this notebook.
+
+```{r}
+#| message: false
+#| warning: false
+##########################################################################################
+library('tidyverse')
+```
+
+I want to set a base directory that we can use for our analysis.
+
+```{r}
+##########################################################################################
+baseRepository = 'D:/requests/1162/240126_orbitrapLumos'
+```
+
+## Data processing
+
+Process the FragPipe data for the first sample.
+
+```{r}
+##########################################################################################
+##get the list of results files
+sampleFolders = c('sample3_1','sample4_1')
+
+##process the protein results
+for (i in 1:length(sampleFolders)){
+  proTemp = read_tsv(paste(baseRepository,'/',sampleFolders[i],'/protein.tsv',sep=''), show_col_types = FALSE) %>%
+    dplyr::select(`Protein ID`, Gene, `Entry Name`, Length, Coverage, `Protein Probability`, `Total Peptides`:`Indistinguishable Proteins`) %>%
+    dplyr::rename(accession = 'Protein ID',
+                  gene = 'Gene',
+                  entry = 'Entry Name',
+                  length = 'Length',
+                  coverage = 'Coverage',
+                  proteinProbability = 'Protein Probability',
+                  totalPeptides = 'Total Peptides',
+                  uniquePeptides = 'Unique Peptides',
+                  razorPeptides = 'Razor Peptides',
+                  totalSpectralCount = 'Total Spectral Count',
+                  uniqueSpectralCount = 'Unique Spectral Count',
+                  razorSpectralCount = 'Razor Spectral Count',
+                  totalIntensity = 'Total Intensity',
+                  uniqueIntensity = 'Unique Intensity',
+                  razorIntensity = 'Razor Intensity',
+                  razorAssignedMods = 'Razor Assigned Modifications',
+                  razorObservedMods = 'Razor Observed Modifications',
+                  indistinguishableProteins = 'Indistinguishable Proteins') %>%
+    dplyr::select(-razorObservedMods) %>%
+    dplyr::arrange(-totalSpectralCount, -totalIntensity, -uniqueIntensity, -razorIntensity)
+  
+  ##save the file
+  write.table(proTemp, paste(baseRepository,'/',sampleFolders[i],'/proteinProcessed.tsv',sep=''),
+            quote = FALSE, sep = '\t', col.names = TRUE, row.names = FALSE)
+}
+```
+
+## Session info
+
+```{r}
+##########################################################################################
+sessionInfo()
+```
