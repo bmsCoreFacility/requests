@@ -145,16 +145,16 @@ fastaIndexMatch$detectableLength = detectableLength
 saveRDS(fastaIndexMatch, paste(baseRepository, '/crap_2024_01_15_index_trypticPeps.rds',sep=''))
 ```
 
-For the viral database.
+For the viral database of AUG starts provided to me by Eric Pringle.
 
 ```{r}
 ##########################################################################################
 ##viral database processing
-fastaDb = readAAStringSet(paste(baseRepository,'/ncbiProtein_GQ994935.1_jan2024.fasta',sep=''))
+fastaDb = readAAStringSet(paste(baseRepository,'/KSHV_AUG_with_kaposins_86Sequences.fasta',sep=''))
 
 ##define an index for each entry
 fastaIndex = tibble('metadata' = names(fastaDb)) %>%
-  mutate(accession = paste('sp|', sub('(.*)\\.[1] [KO].*','\\1', metadata), '|VIRUS', seq(1,nrow(.),1), '_HUMAN ', 'GN=VIRUS', seq(1,nrow(.),1), sep=''))
+  mutate(accession = paste('sp|V', seq(10001,10000+nrow(.),1), '|VIRUS', seq(1,nrow(.),1), '_HUMAN ', 'GN=VIRUS', seq(1,nrow(.),1), sep=''))
 
 
 ##make an index that matches the human one
@@ -166,8 +166,7 @@ fastaIndexMatch = fastaIndex %>%
   dplyr::mutate(species = 'virus') %>%
   dplyr::select(accession, gene, length, species)
 
-##save this index  
-saveRDS(fastaIndexMatch, paste(baseRepository, '/ncbiProtein_GQ994935.1_jan2024_index.rds',sep=''))
+
 
 ##loop through the database entries and calculate tryptic peptide numbers
 trypticPeptides = vector()
@@ -193,10 +192,10 @@ for (i in 1:length(fastaDb)){
 ##add the output to our previously generated index
 fastaIndexMatch$detectablePeptides = trypticPeptides
 fastaIndexMatch$detectableLength = detectableLength
-
+fastaIndexMatch$pringleId = fastaIndex$metadata
 
 ##save the file
-saveRDS(fastaIndexMatch, paste(baseRepository, '/ncbiProtein_GQ994935.1_jan2024_index_trypticPeps.rds',sep=''))
+saveRDS(fastaIndexMatch, paste(baseRepository, '/KSHV_AUG_with_kaposins_86Sequences_index_trypticPeps.rds',sep=''))
 ```
 
 Finished here for now.

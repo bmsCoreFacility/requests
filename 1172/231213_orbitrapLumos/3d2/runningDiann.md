@@ -50,7 +50,7 @@ head -n 1 /mnt/d/requests/231213_1172/project_3d2/240112_231213_1172_3D2_repA_di
 
 ```
 
-Rerun all of this using the database that Eric Pringle sent us.
+Rerun all of this using the database that Eric Pringle sent us. I made a separate directory for this analysis called project_3d2Aug.
 
 Do this using a shell script, as below.
 
@@ -58,7 +58,7 @@ Do this using a shell script, as below.
 #!/bin/bash
 diannLocation="/mnt/e/softwareTools/fragpipe-jre-211/tools/diann/1.8.2_beta_8/linux/diann-1.8.1.8"
 baseLibraryLocation="/mnt/d/bmsProjects/diaTesting/"
-baseProjectLocation="/mnt/d/requests/1172/231213_orbitrapLumos/project_3d2/"
+baseProjectLocation="/mnt/d/requests/1172/231213_orbitrapLumos/project_3d2Aug/"
 
 ###################################
 ##run diann
@@ -74,17 +74,17 @@ do
     printf "processing diann analysis for mass fraction ${i}.mzML."
     echo
     eval mkdir ${baseProjectLocation}${i}
-    eval $diannLocation --f "${baseProjectLocation}${i}.mzML" --lib "${baseProjectLocation}libGenerationAugDatabase/generatedSpecLib.tsv" --threads 28 --verbose 1 --out "${baseProjectLocation}${i}_aug/report.tsv" --qvalue 0.01  --matrices  --reannotate --fasta "${baseProjectLocation}uniprotkb_proteome_UP000005640_AND_revi_2024_01_15.fasta" --fasta "${baseProjectLocation}KSHV_AUG_with_kaposins_86Sequences_reannotated.fasta" --fasta "${baseProjectLocation}crapDatabaseReannotated.fasta" --met-excision --cut K*,R* --missed-cleavages 1 --min-pep-len 7 --max-pep-len 30 --min-pr-mz 430 --max-pr-mz 930 --min-pr-charge 2 --max-pr-charge 4 --unimod4 --smart-profiling --peak-center --no-ifs-removal
+    eval $diannLocation --f "${baseProjectLocation}${i}.mzML" --lib "${baseProjectLocation}libGenerationAugDatabase/generatedSpecLib.tsv" --threads 28 --verbose 1 --out "${baseProjectLocation}${i}/report.tsv" --qvalue 0.01  --matrices  --reannotate --fasta "${baseProjectLocation}uniprotkb_proteome_UP000005640_AND_revi_2024_01_15.fasta" --fasta "${baseProjectLocation}KSHV_AUG_with_kaposins_86Sequences_reannotated.fasta" --fasta "${baseProjectLocation}crapDatabaseReannotated.fasta" --met-excision --cut K*,R* --missed-cleavages 1 --min-pep-len 7 --max-pep-len 30 --min-pr-mz 430 --max-pr-mz 930 --min-pr-charge 2 --max-pr-charge 4 --unimod4 --smart-profiling --peak-center --no-ifs-removal
 ##filter the output file
     echo
     printf "filtering the output file for Lib.PG.Q.Value <= 0.01"
     echo
-    eval "awk 'BEGIN {FS="\t"}; NR==1; NR > 1{ if($41 <= 0.01) { print }}' ${baseProjectLocation}${i}_aug/report.tsv > ${baseProjectLocation}${i}_aug/reportFiltered.tsv"
+    eval "awk 'BEGIN {FS="\t"}; NR==1; NR > 1{ if($41 <= 0.01) { print }}' ${baseProjectLocation}${i}/report.tsv > ${baseProjectLocation}${i}/reportFiltered.tsv"
 done
 
 ###################################
 ##combine the output files
-head -n 1 /mnt/d/requests/231213_1172/project_3d2/240112_231213_1172_3D2_repA_dia1_aug/report.tsv > /mnt/d/requests/231213_1172/project_3d2/combinedFilteredReport_aug.tsv; tail -n +2 -q /mnt/d/requests/231213_1172/project_3d2/240112_231213_1172_3D2_repA_dia1_aug/report.tsv /mnt/d/requests/231213_1172/project_3d2/240112_231213_1172_3D2_repA_dia2_aug/report.tsv /mnt/d/requests/231213_1172/project_3d2/240112_231213_1172_3D2_repA_dia3_aug/report.tsv /mnt/d/requests/231213_1172/project_3d2/240112_231213_1172_3D2_repB_dia1_aug/report.tsv /mnt/d/requests/231213_1172/project_3d2/240112_231213_1172_3D2_repB_dia2_aug/report.tsv /mnt/d/requests/231213_1172/project_3d2/240112_231213_1172_3D2_repB_dia3_aug/report.tsv /mnt/d/requests/231213_1172/project_3d2/240112_231213_1172_3D2_repD_dia1_aug/report.tsv /mnt/d/requests/231213_1172/project_3d2/240112_231213_1172_3D2_repD_dia2_aug/report.tsv /mnt/d/requests/231213_1172/project_3d2/240112_231213_1172_3D2_repD_dia3_aug/report.tsv /mnt/d/requests/231213_1172/project_3d2/240112_231213_1172_Neg_repA_dia1_aug/report.tsv /mnt/d/requests/231213_1172/project_3d2/240112_231213_1172_Neg_repA_dia2_aug/report.tsv /mnt/d/requests/231213_1172/project_3d2/240112_231213_1172_Neg_repA_dia3_aug/report.tsv /mnt/d/requests/231213_1172/project_3d2/240112_231213_1172_Neg_repB_dia1_aug/report.tsv /mnt/d/requests/231213_1172/project_3d2/240112_231213_1172_Neg_repB_dia2_aug/report.tsv /mnt/d/requests/231213_1172/project_3d2/240112_231213_1172_Neg_repB_dia3_aug/report.tsv /mnt/d/requests/231213_1172/project_3d2/240112_231213_1172_Neg_repD_dia1_aug/report.tsv /mnt/d/requests/231213_1172/project_3d2/240112_231213_1172_Neg_repD_dia2_aug/report.tsv /mnt/d/requests/231213_1172/project_3d2/240112_231213_1172_Neg_repD_dia3_aug/report.tsv >> /mnt/d/requests/231213_1172/project_3d2/combinedFilteredReport_aug.tsv
+head -n 1 ${baseProjectLocation}240112_231213_1172_3D2_repA_dia1/report.tsv > ${baseProjectLocation}combinedFilteredReport.tsv; tail -n +2 -q ${baseProjectLocation}240112_231213_1172_3D2_repA_dia1/report.tsv ${baseProjectLocation}240112_231213_1172_3D2_repA_dia2/report.tsv ${baseProjectLocation}240112_231213_1172_3D2_repA_dia3/report.tsv ${baseProjectLocation}240112_231213_1172_3D2_repB_dia1/report.tsv ${baseProjectLocation}240112_231213_1172_3D2_repB_dia2/report.tsv ${baseProjectLocation}240112_231213_1172_3D2_repB_dia3/report.tsv ${baseProjectLocation}240112_231213_1172_3D2_repD_dia1/report.tsv ${baseProjectLocation}240112_231213_1172_3D2_repD_dia2/report.tsv ${baseProjectLocation}240112_231213_1172_3D2_repD_dia3/report.tsv ${baseProjectLocation}240112_231213_1172_Neg_repA_dia1/report.tsv ${baseProjectLocation}240112_231213_1172_Neg_repA_dia2/report.tsv ${baseProjectLocation}240112_231213_1172_Neg_repA_dia3/report.tsv ${baseProjectLocation}240112_231213_1172_Neg_repB_dia1/report.tsv ${baseProjectLocation}240112_231213_1172_Neg_repB_dia2/report.tsv ${baseProjectLocation}240112_231213_1172_Neg_repB_dia3/report.tsv ${baseProjectLocation}240112_231213_1172_Neg_repD_dia1/report.tsv ${baseProjectLocation}240112_231213_1172_Neg_repD_dia2/report.tsv ${baseProjectLocation}240112_231213_1172_Neg_repD_dia3/report.tsv >> ${baseProjectLocation}combinedFilteredReport.tsv
 ```
 
 
