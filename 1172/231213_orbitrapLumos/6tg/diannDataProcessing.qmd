@@ -28,7 +28,7 @@ I want to set a base directory that we can use as a working space.
 
 ```{r}
 ##########################################################################################
-baseRepository = 'D:/requests/231213_1172/project_6tg'
+baseRepository = 'D:/requests/1172/231213_orbitrapLumos/project_6tg'
 ```
 
 ## Data processing
@@ -55,10 +55,15 @@ iqResult = process_long_format(paste(baseRepository,'/combinedFilteredReportAnno
                            filter_double_less = c("Lib.Q.Value" = "0.01", "Lib.PG.Q.Value" = "0.01"),
                            peptide_extractor = function(x) gsub("[0-9].*$", "", x))
 
+##read in the human index
+annotationDb = readRDS(paste(baseRepository, '/uniprotkb_proteome_UP000005640_AND_revi_2024_01_15_index_trypticPeps.rds',sep='')) %>%
+  dplyr::select(-gene, -species)
+
 ##parse the IQ result
 proData = read_tsv(paste(baseRepository,'/combinedFilteredReportAnnotatedIq.tsv',sep=''), show_col_types = FALSE) %>%
   dplyr::rename(accession = 'Protein.Group',
-                symbol = 'Genes')
+                symbol = 'Genes') %>%
+  dplyr::left_join(annotationDb)
 
 
 ##save the data
@@ -95,12 +100,11 @@ for (i in 1:length(conditionsToCompare)){
                   cont_rep3 = ifelse(samples123 == 3, min(cont_rep3, na.rm = TRUE), cont_rep3)) %>%
     dplyr::mutate(treat_rep1 = ifelse(samples456 == 3, min(treat_rep1, na.rm = TRUE), treat_rep1),
                   treat_rep2 = ifelse(samples456 == 3, min(treat_rep2, na.rm = TRUE), treat_rep2),
-                  treat_rep3 = ifelse(samples456 == 3, min(treat_rep3, na.rm = TRUE), treat_rep3)) %>%
-    dplyr::select(-samples123, -samples456)
+                  treat_rep3 = ifelse(samples456 == 3, min(treat_rep3, na.rm = TRUE), treat_rep3))
   #
   rownames(datFiltered) = datFiltered$accession
   dat.log = datFiltered %>%
-    dplyr::select(-accession, -symbol)
+    dplyr::select(-accession, -symbol, -samples123, -samples456)
   #dat.log = na.omit(datFiltered)
   #boxplot(dat.log, las = 2, main = 'total protein abundance')
   
@@ -128,10 +132,15 @@ for (i in 1:length(conditionsToCompare)){
   
   ##extract the data
   #head(fit4$coefficients)
-  toAnnotate = forPsm[,1:4]
+  psmAnnotate = dplyr::select(forPsm, accession, symbol, n_fragments, n_peptides)
+  valuesAnnotate = dplyr::select(datFiltered, accession, symbol, samples123, samples456) %>%
+    dplyr::rename(controlValues = 'samples123',
+                  conditionValues = 'samples456')
   deqmsResults = tibble(outputResult(fit4, coef_col = 1)) %>%
     dplyr::rename(accession = 'gene') %>%
-    dplyr::left_join(toAnnotate)
+    dplyr::left_join(psmAnnotate) %>%
+    dplyr::left_join(annotationDb) %>%
+    dplyr::left_join(valuesAnnotate)
   #
   saveRDS(deqmsResults, paste(baseRepository, '/dataset_deqms_', conditionsToCompare[i], '-', controlCondition, '.rds', sep = ''))
   write.table(deqmsResults, paste(baseRepository, '/dataset_deqms_', conditionsToCompare[i], '-', controlCondition, '.tsv', sep = ''),

@@ -111,12 +111,11 @@ for (i in 1:length(conditionsToCompare)){
                   cont_rep3 = ifelse(samples123 == 3, min(cont_rep3, na.rm = TRUE), cont_rep3)) %>%
     dplyr::mutate(treat_rep1 = ifelse(samples456 == 3, min(treat_rep1, na.rm = TRUE), treat_rep1),
                   treat_rep2 = ifelse(samples456 == 3, min(treat_rep2, na.rm = TRUE), treat_rep2),
-                  treat_rep3 = ifelse(samples456 == 3, min(treat_rep3, na.rm = TRUE), treat_rep3)) %>%
-    dplyr::select(-samples123, -samples456)
+                  treat_rep3 = ifelse(samples456 == 3, min(treat_rep3, na.rm = TRUE), treat_rep3))
   #
   rownames(datFiltered) = datFiltered$accession
   dat.log = datFiltered %>%
-    dplyr::select(-accession, -symbol)
+    dplyr::select(-accession, -symbol, -samples123, -samples456)
   #dat.log = na.omit(datFiltered)
   #boxplot(dat.log, las = 2, main = 'total protein abundance')
   
@@ -144,11 +143,15 @@ for (i in 1:length(conditionsToCompare)){
   
   ##extract the data
   #head(fit4$coefficients)
-  toAnnotate = forPsm[,1:4]
+  psmAnnotate = dplyr::select(forPsm, accession, symbol, n_fragments, n_peptides)
+  valuesAnnotate = dplyr::select(datFiltered, accession, symbol, samples123, samples456) %>%
+    dplyr::rename(controlValues = 'samples123',
+                  conditionValues = 'samples456')
   deqmsResults = tibble(outputResult(fit4, coef_col = 1)) %>%
     dplyr::rename(accession = 'gene') %>%
-    dplyr::left_join(toAnnotate) %>%
-    dplyr::left_join(annotationDb)
+    dplyr::left_join(psmAnnotate) %>%
+    dplyr::left_join(annotationDb) %>%
+    dplyr::left_join(valuesAnnotate)
   #
   saveRDS(deqmsResults, paste(baseRepository, '/dataset_deqms_', conditionsToCompare[i], '-', controlCondition, '.rds', sep = ''))
   write.table(deqmsResults, paste(baseRepository, '/dataset_deqms_', conditionsToCompare[i], '-', controlCondition, '.tsv', sep = ''),
