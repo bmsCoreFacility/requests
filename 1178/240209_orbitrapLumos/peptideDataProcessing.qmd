@@ -1,0 +1,102 @@
+---
+title: "peptideDataProcessing"
+author: "Christopher Hughes"
+format: html
+editor: visual
+---
+
+## Details
+
+This document describes processing of data from Fairn lab in order to look at GLUD1.
+
+## Setting up the environment
+
+These are packages you will need for this notebook. For exact versions used, please refer to the session info at the bottom of this notebook.
+
+```{r}
+#| message: false
+#| warning: false
+##########################################################################################
+library('tidyverse')
+```
+
+I want to set a base directory that we can use for our analysis.
+
+```{r}
+##########################################################################################
+baseRepository = 'D:/requests/1178/240209_orbitrapLumos'
+```
+
+## Data processing
+
+Read in the psm data and process into a set for GLUD1.In the first part of this I do normalization of the intensity data.
+
+```{r}
+##########################################################################################
+##read the PSM data
+sample1 = read_tsv(paste(baseRepository, '/fragpipeAnalysis/control1/psm.tsv',sep=''), show_col_types = FALSE) %>%
+  dplyr::select(Intensity)
+sample2 = read_tsv(paste(baseRepository, '/fragpipeAnalysis/control2/psm.tsv',sep=''), show_col_types = FALSE) %>%
+  dplyr::select(Intensity)
+sample3 = read_tsv(paste(baseRepository, '/fragpipeAnalysis/palm1/psm.tsv',sep=''), show_col_types = FALSE) %>%
+  dplyr::select(Intensity)
+sample4 = read_tsv(paste(baseRepository, '/fragpipeAnalysis/palm2/psm.tsv',sep=''), show_col_types = FALSE) %>%
+  dplyr::select(Intensity)
+target = mean(c(colSums(sample1, na.rm = TRUE), colSums(sample2, na.rm = TRUE), colSums(sample3, na.rm = TRUE), colSums(sample4, na.rm = TRUE)))
+normFacs = target/colSums(sample1, na.rm = TRUE)
+sample1Norm = sweep(sample1, 2, normFacs, FUN = "*")
+normFacs = target/colSums(sample2, na.rm = TRUE)
+sample2Norm = sweep(sample2, 2, normFacs, FUN = "*")
+normFacs = target/colSums(sample3, na.rm = TRUE)
+sample3Norm = sweep(sample3, 2, normFacs, FUN = "*")
+normFacs = target/colSums(sample4, na.rm = TRUE)
+sample4Norm = sweep(sample4, 2, normFacs, FUN = "*")
+sampleNormData = list(sample1Norm, sample2Norm, sample3Norm, sample4Norm)
+
+##read PSM data
+samplesToProcess = c('control1','control2','palm1','palm2')
+peptideData = tibble()
+
+##
+for (i in 1:length(samplesToProcess)){
+  psmTemp = read_tsv(paste(baseRepository, '/fragpipeAnalysis/',samplesToProcess[i],'/psm.tsv',sep=''), show_col_types = FALSE) %>%
+    dplyr::mutate(intensityNorm = sampleNormData[[i]]$Intensity) %>%
+    dplyr::select(Peptide, `Protein Start`, `Protein End`, Intensity, `Assigned Modifications`, `Protein ID`, Gene, intensityNorm) %>%
+    dplyr::filter(Gene == 'GLUD1' & grepl('C',Peptide) & Intensity > 0) %>%
+    dplyr::rename(accession = `Protein ID`,
+                  gene = "Gene",
+                  sequence = "Peptide",
+                  proStart = "Protein Start",
+                  proEnd = "Protein End",
+                  intensity = "Intensity",
+                  normIntensity = "intensityNorm",
+                  mods = "Assigned Modifications") %>%
+    dplyr::group_by(accession, gene, sequence, proStart, proEnd, mods) %>%
+    dplyr::mutate(psms = 1) %>%
+    dplyr::summarise(medIntensity = median(intensity, na.rm = TRUE),
+                     medNormIntensity = median(normIntensity, na.rm = TRUE),
+                     numPsms = sum(psms, na.rm = TRUE)) %>%
+    dplyr::mutate(sampleId = samplesToProcess[i])
+  #
+  peptideData = rbind(peptideData, psmTemp)
+}
+
+##save these data
+saveRDS(peptideData, paste(baseRepository, '/cysteineProfiling/dataset_parsedPeptideData.rds',sep=''))
+write.table(peptideData, paste(baseRepository, '/cysteineProfiling/dataset_parsedPeptideData.tsv',sep=''),
+            quote = FALSE, col.names = TRUE, row.names = FALSE, sep = '\t')
+
+##make wide
+peptideWide = peptideData %>%
+  dplyr::ungroup() %>%
+  dplyr::select(sequence, sampleId, numPsms, medIntensity, medNormIntensity) %>%
+  tidyr::pivot_wider(id_cols = 'sampleId', names_from = 'sequence', values_from = c('numPsms','medIntensity','medNormIntensity'))
+```
+
+## Session info
+
+```{r}
+##########################################################################################
+sessionInfo()
+```
+

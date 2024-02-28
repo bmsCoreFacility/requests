@@ -67,6 +67,54 @@ for (i in 1:length(sampleFolders)){
 }
 ```
 
+Redo the above processing for the results from using the coturnix japonica database from ncbi.
+
+```{r}
+##########################################################################################
+##get the fasta index
+annotationDb = readRDS(paste(baseRepository,'/coturnixJaponica/20240221_coturnixJaponica_ncbi_index.rds',sep=''))
+
+
+##get the list of results files
+sampleFolders = c('sample5','sample6')
+
+##process the protein results
+for (i in 1:length(sampleFolders)){
+  proTemp = read_tsv(paste(baseRepository,'/coturnixJaponica/',sampleFolders[i],'/protein.tsv',sep=''), show_col_types = FALSE) %>%
+    dplyr::select(`Protein ID`, Gene, `Entry Name`, Length, Coverage, `Protein Probability`, `Total Peptides`:`Indistinguishable Proteins`) %>%
+    dplyr::rename(accession = 'Protein ID',
+                  gene = 'Gene',
+                  entry = 'Entry Name',
+                  length = 'Length',
+                  coverage = 'Coverage',
+                  proteinProbability = 'Protein Probability',
+                  totalPeptides = 'Total Peptides',
+                  uniquePeptides = 'Unique Peptides',
+                  razorPeptides = 'Razor Peptides',
+                  totalSpectralCount = 'Total Spectral Count',
+                  uniqueSpectralCount = 'Unique Spectral Count',
+                  razorSpectralCount = 'Razor Spectral Count',
+                  totalIntensity = 'Total Intensity',
+                  uniqueIntensity = 'Unique Intensity',
+                  razorIntensity = 'Razor Intensity',
+                  razorAssignedMods = 'Razor Assigned Modifications',
+                  razorObservedMods = 'Razor Observed Modifications',
+                  indistinguishableProteins = 'Indistinguishable Proteins') %>%
+    dplyr::select(-razorObservedMods) %>%
+    dplyr::arrange(-totalSpectralCount, -totalIntensity, -uniqueIntensity, -razorIntensity) %>%
+    dplyr::left_join(annotationDb)
+  
+  ##save the file
+  write.table(proTemp, paste(baseRepository,'/coturnixJaponica/',sampleFolders[i],'/proteinProcessed.tsv',sep=''),
+            quote = FALSE, sep = '\t', col.names = TRUE, row.names = FALSE)
+}
+
+```
+
+
+
+
+
 ## Session info
 
 ```{r}
