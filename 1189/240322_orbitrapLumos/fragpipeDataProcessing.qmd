@@ -24,24 +24,25 @@ I want to set a base directory that we can use for our analysis.
 
 ```{r}
 ##########################################################################################
-baseRepository = 'D:/requests/1184/240219_orbitrapLumos'
+baseRepository = 'D:/requests/1189/240322_orbitrapLumos/fragpipeFirstPass'
 ```
 
 ## Data processing
 
-Process the FragPipe data for the first sample.
+Process the FragPipe data for all of the samples.
 
 ```{r}
 ##########################################################################################
+##read in the fasta index
+annotationDb = readRDS(paste(baseRepository, '/2024-03-25-reviewed-UP000005640-spikein_index_trypticPeps.rds',sep=''))
+
 ##read in the protein result file
-foldersToProcess = c('sample1','sample2','sample3','sample4','sample5','sample6')
+foldersToProcess = c('sample366_dilute','sample366','sampleS1_dilute','sampleS1')
 for (i in 1:length(foldersToProcess)){
-  proTemp = read_tsv(paste(baseRepository,'/',foldersToProcess[i],'_1/protein.tsv',sep=''), show_col_types = FALSE) %>%
-    dplyr::select(`Protein ID`, Gene, `Entry Name`, Length, Coverage, `Protein Probability`, `Total Peptides`:`Indistinguishable Proteins`) %>%
+  proTemp = read_tsv(paste(baseRepository,'/',foldersToProcess[i],'/protein.tsv',sep=''), show_col_types = FALSE) %>%
+    dplyr::select(`Protein ID`,`Entry Name`, Coverage, `Protein Probability`, `Total Peptides`:`Indistinguishable Proteins`) %>%
     dplyr::rename(accession = 'Protein ID',
-                  gene = 'Gene',
                   entry = 'Entry Name',
-                  length = 'Length',
                   coverage = 'Coverage',
                   proteinProbability = 'Protein Probability',
                   totalPeptides = 'Total Peptides',
@@ -58,21 +59,17 @@ for (i in 1:length(foldersToProcess)){
                   indistinguishableProteins = 'Indistinguishable Proteins') %>%
     dplyr::select(-razorObservedMods) %>%
     dplyr::arrange(-totalSpectralCount, -totalIntensity, -uniqueIntensity, -razorIntensity) %>%
-    dplyr::filter(!grepl('KRT', gene) & !grepl('ACACA', gene)) %>%
-    dplyr::filter(uniquePeptides >= 1)
+    dplyr::filter(!grepl('KRT', gene)) %>%
+    dplyr::filter(uniquePeptides >= 1) %>%
+    dplyr::left_join(annotationDb)
   
   ##save the file
-  write.table(proTemp, paste(baseRepository,'/',foldersToProcess[i],'_1/proteinProcessed.tsv',sep=''),
+  write.table(proTemp, paste(baseRepository,'/',foldersToProcess[i],'/proteinProcessed.tsv',sep=''),
             quote = FALSE, sep = '\t', col.names = TRUE, row.names = FALSE)
 }
 ```
 
 Combine the data for comparisons.
-
-
-
-
-
 
 ## Session info
 

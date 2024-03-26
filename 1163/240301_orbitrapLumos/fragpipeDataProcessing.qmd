@@ -24,7 +24,7 @@ I want to set a base directory that we can use for our analysis.
 
 ```{r}
 ##########################################################################################
-baseRepository = 'D:/requests/1184/240219_orbitrapLumos'
+baseRepository = 'D:/requests/1163/240301_orbitrapLumos'
 ```
 
 ## Data processing
@@ -33,15 +33,18 @@ Process the FragPipe data for the first sample.
 
 ```{r}
 ##########################################################################################
+##read in the fasta index
+fastaIndex = readRDS(paste(baseRepository, '/2024-03-19-reviewed-UP000000589_index_trypticPeps.rds',sep=''))
+
+
 ##read in the protein result file
-foldersToProcess = c('sample1','sample2','sample3','sample4','sample5','sample6')
+foldersToProcess = c(paste('sample',seq(1,15,1),sep=''))
 for (i in 1:length(foldersToProcess)){
-  proTemp = read_tsv(paste(baseRepository,'/',foldersToProcess[i],'_1/protein.tsv',sep=''), show_col_types = FALSE) %>%
-    dplyr::select(`Protein ID`, Gene, `Entry Name`, Length, Coverage, `Protein Probability`, `Total Peptides`:`Indistinguishable Proteins`) %>%
+  proTemp = read_tsv(paste(baseRepository,'/fragpipeAnalysis1/',foldersToProcess[i],'/protein.tsv',sep=''), show_col_types = FALSE) %>%
+    dplyr::select(`Protein ID`, Gene, `Entry Name`, Coverage, `Protein Probability`, `Total Peptides`:`Indistinguishable Proteins`) %>%
     dplyr::rename(accession = 'Protein ID',
                   gene = 'Gene',
                   entry = 'Entry Name',
-                  length = 'Length',
                   coverage = 'Coverage',
                   proteinProbability = 'Protein Probability',
                   totalPeptides = 'Total Peptides',
@@ -58,19 +61,15 @@ for (i in 1:length(foldersToProcess)){
                   indistinguishableProteins = 'Indistinguishable Proteins') %>%
     dplyr::select(-razorObservedMods) %>%
     dplyr::arrange(-totalSpectralCount, -totalIntensity, -uniqueIntensity, -razorIntensity) %>%
-    dplyr::filter(!grepl('KRT', gene) & !grepl('ACACA', gene)) %>%
-    dplyr::filter(uniquePeptides >= 1)
+    dplyr::filter(!grepl('KRT', gene)) %>%
+    dplyr::filter(uniquePeptides >= 1) %>%
+    dplyr::left_join(fastaIndex)
   
   ##save the file
-  write.table(proTemp, paste(baseRepository,'/',foldersToProcess[i],'_1/proteinProcessed.tsv',sep=''),
+  write.table(proTemp, paste(baseRepository,'/fragpipeAnalysis1/',foldersToProcess[i],'/proteinProcessed.tsv',sep=''),
             quote = FALSE, sep = '\t', col.names = TRUE, row.names = FALSE)
 }
 ```
-
-Combine the data for comparisons.
-
-
-
 
 
 

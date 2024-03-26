@@ -11,7 +11,7 @@ This document describes processing of proteomics data from DIANN to compile a fi
 
 ## Setting up the environment
 
-These are packages you will need for this notebook. For exact versions used, please refer to the session info at the bottom of this notebook.
+Remember to clear the workspace and restart R before beginning. These are packages you will need for this notebook. For exact versions used, please refer to the session info at the bottom of this notebook.
 
 ```{r}
 #| message: false
@@ -22,6 +22,12 @@ library('iq')
 library('DEqMS')
 library('RColorBrewer')
 library('ggrepel')
+
+#for DreamAI https://github.com/WangLab-MSSM/DreamAI
+#BiocManager::install(c("cluster", "survival", "randomForest", "missForest", "glmnet", "Rcpp", "foreach", "itertools", "iterators", "Matrix", "devtools", "impute", "remotes"))
+#library('remotes')
+#install_github("WangLab-MSSM/DreamAI/Code")
+library('DreamAI')
 ```
 
 I want to set a base directory that we can use as a working space.
@@ -32,6 +38,24 @@ baseRepository = 'D:/requests/1172/231213_orbitrapLumos/project_6tg'
 ```
 
 ## Data processing
+
+Test imputing peptide data.
+
+```{r}
+##########################################################################################
+##quickly check the example data to see what the required format is
+#data(datapnnl)
+#data<-datapnnl.rm.ref[1:100,1:21]
+##it looks like it is log scale values, rownames are protein accessions, column names are sample IDs
+
+##read in the data from DIA-NN
+raw = read_tsv(paste(baseRepository, '/combinedFilteredReport.tsv',sep=''), show_col_types = FALSE) %>%
+  dplyr::mutate(File.Name = sub('.*240112_231213_1172_(.*)_dia[123]\\.mzML', '\\1', File.Name)) %>%
+  dplyr::filter(!is.na(Genes) & !grepl(';', Protein.Group))
+
+
+
+```
 
 Read in data from DIA-NN and process with the IQ package.
 
@@ -56,7 +80,7 @@ iqResult = process_long_format(paste(baseRepository,'/combinedFilteredReportAnno
                            peptide_extractor = function(x) gsub("[0-9].*$", "", x))
 
 ##read in the human index
-annotationDb = readRDS(paste(baseRepository, '/uniprotkb_proteome_UP000005640_AND_revi_2024_01_15_index_trypticPeps.rds',sep='')) %>%
+annotationDb = readRDS(paste(baseRepository, '/2024-02-21-reviewed-UP000005640-spikein_index_trypticPeps.rds',sep='')) %>%
   dplyr::select(-gene, -species)
 
 ##parse the IQ result
@@ -94,7 +118,7 @@ for (i in 1:length(conditionsToCompare)){
   colnames(dat)[6:8] = c('treat_rep1','treat_rep2','treat_rep3')
   #
   datFiltered = as.data.frame(dat) %>%
-    dplyr::filter(samples123 < 1 | samples456 < 1) %>%
+    dplyr::filter(samples123 < 2 | samples456 < 2) %>%
     dplyr::mutate(cont_rep1 = ifelse(samples123 == 3, min(cont_rep1, na.rm = TRUE), cont_rep1),
                   cont_rep2 = ifelse(samples123 == 3, min(cont_rep2, na.rm = TRUE), cont_rep2),
                   cont_rep3 = ifelse(samples123 == 3, min(cont_rep3, na.rm = TRUE), cont_rep3)) %>%
