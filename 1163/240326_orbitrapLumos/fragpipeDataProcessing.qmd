@@ -24,7 +24,7 @@ I want to set a base directory that we can use for our analysis.
 
 ```{r}
 ##########################################################################################
-baseRepository = 'D:/requests/1189/240322_orbitrapLumos/fragpipeFirstPass'
+baseRepository = 'D:/requests/1163/240326_orbitrapLumos/fragpipeFirstPass'
 ```
 
 ## Data processing
@@ -34,12 +34,12 @@ Process the FragPipe data for all of the samples.
 ```{r}
 ##########################################################################################
 ##read in the fasta index
-annotationDb = readRDS(paste(baseRepository, '/2024-03-25-reviewed-UP000005640-spikein_index_trypticPeps.rds',sep=''))
+annotationDb = readRDS(paste(baseRepository, '/2024-03-27-reviewed-UP000000589-spikein.fasta_index_trypticPeps.rds',sep=''))
 
 ##read in the protein result file
-foldersToProcess = c('sample366_dilute','sample366','sampleS1_dilute','sampleS1')
+foldersToProcess = c('IgGFL','IgGML','IPIgG','IPML','MWFL','MWML','PDLuc','PDPi14')
 for (i in 1:length(foldersToProcess)){
-  proTemp = read_tsv(paste(baseRepository,'/',foldersToProcess[i],'/protein.tsv',sep=''), show_col_types = FALSE) %>%
+  proTemp = read_tsv(paste(baseRepository,'/sample',foldersToProcess[i],'/protein.tsv',sep=''), show_col_types = FALSE) %>%
     dplyr::select(`Protein ID`,`Entry Name`, Coverage, `Protein Probability`, `Total Peptides`:`Indistinguishable Proteins`) %>%
     dplyr::rename(accession = 'Protein ID',
                   entry = 'Entry Name',
@@ -63,7 +63,7 @@ for (i in 1:length(foldersToProcess)){
     dplyr::left_join(annotationDb)
   
   ##save the file
-  write.table(proTemp, paste(baseRepository,'/',foldersToProcess[i],'/proteinProcessed.tsv',sep=''),
+  write.table(proTemp, paste(baseRepository,'/sample',foldersToProcess[i],'/proteinProcessed.tsv',sep=''),
             quote = FALSE, sep = '\t', col.names = TRUE, row.names = FALSE)
 }
 ```
