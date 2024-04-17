@@ -18,6 +18,7 @@ These are packages you will need for this notebook. For exact versions used, ple
 #| warning: false
 ##########################################################################################
 library('tidyverse')
+library('writexl')
 ```
 
 I want to set a base directory that we can use for our analysis.
@@ -66,9 +67,49 @@ for (i in 1:length(foldersToProcess)){
   write.table(proTemp, paste(baseRepository,'/sample',foldersToProcess[i],'/proteinProcessed.tsv',sep=''),
             quote = FALSE, sep = '\t', col.names = TRUE, row.names = FALSE)
 }
+
+
+
 ```
 
 Combine the data for comparisons.
+
+```{r}
+##########################################################################################
+##read in the protein result file
+allSamples = tibble()
+foldersToProcess = c('EV','K3','K3VG','K3VGQ','VG')
+for (i in 1:length(foldersToProcess)){
+ proTemp = read_tsv(paste(baseRepository,'/sample',foldersToProcess[i],'/proteinProcessed.tsv',sep=''), show_col_types = FALSE) %>%
+   dplyr::select(accession, gene, uniqueIntensity) %>%
+   dplyr::mutate(dataset = foldersToProcess[i]) %>%
+   dplyr::filter(!grepl('CONT',accession) & !grepl('KRT',gene)) %>%
+   dplyr::mutate(uniqueIntensity = log10(uniqueIntensity))
+   
+  #
+ allSamples = rbind(allSamples, proTemp)
+}
+
+
+##viral annotation
+viralDb = readRDS(paste(baseRepository, '/KSHV_AUG_with_kaposins_86Sequences_index_trypticPeps.rds',sep='')) %>%
+  dplyr::select(-gene)
+
+#shift to wide format
+allSamplesWide = tidyr::pivot_wider(allSamples, id_cols = c('accession','gene'), names_from = 'dataset', values_from = 'uniqueIntensity') %>%
+  left_join(viralDb)
+write_xlsx(allSamplesWide, paste(baseRepository, '/dataset_allSamplesWide_notAdjusted.xlsx', sep=''),
+           format_headers = FALSE)
+
+#adjust for EV background
+allSamplesWide[,3:7] = apply(allSamplesWide[,3:7], 2, function(x) x - allSamplesWide$EV)
+write_xlsx(allSamplesWide, paste(baseRepository, '/dataset_allSamplesWide_evAdjusted.xlsx', sep=''),
+           format_headers = FALSE)
+
+```
+
+
+
 
 ## Session info
 
