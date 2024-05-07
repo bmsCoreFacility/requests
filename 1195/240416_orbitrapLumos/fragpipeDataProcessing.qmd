@@ -24,7 +24,7 @@ I want to set a base directory that we can use for our analysis.
 
 ```{r}
 ##########################################################################################
-baseRepository = 'E:/requests/1184/240417_orbitrapLumos'
+baseRepository = 'E:/requests/1195/240416_orbitrapLumos'
 ```
 
 ## Data processing
@@ -34,10 +34,10 @@ Process the FragPipe data for all of the samples.
 ```{r}
 ##########################################################################################
 ##read in the fasta index
-annotationDb = readRDS(paste(baseRepository, '/databases/2024-04-19-reviewed-UP000005640-spikein.fasta_index_trypticPeps.rds',sep=''))
+annotationDb = readRDS(paste(baseRepository, '/databases/2024-04-21-reviewed-UP000005640-spikein.fasta_index_trypticPeps.rds',sep=''))
 
 ##read in the protein result file
-foldersToProcess = c(seq(1,18,1))
+foldersToProcess = c(paste('GC_N',seq(1,3,1),sep=''),paste('9G1_N',seq(1,3,1),sep=''))
 for (i in 1:length(foldersToProcess)){
   proTemp = read_tsv(paste(baseRepository,'/fragpipeFirstPass/sample',foldersToProcess[i],'/protein.tsv',sep=''), show_col_types = FALSE) %>%
     dplyr::select(`Protein ID`,`Entry Name`, Coverage, `Protein Probability`, `Total Peptides`:`Indistinguishable Proteins`) %>%

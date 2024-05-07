@@ -14,6 +14,8 @@ This document describes processing a fasta database to get a count for the numbe
 These are packages you will need for this notebook. For exact versions used, please refer to the session info at the bottom of this notebook.
 
 ```{r}
+#| message: false
+#| warning: false
 ##########################################################################################
 library('tidyverse')
 library('Peptides')
@@ -25,7 +27,7 @@ I want to set a base directory that we can use for our analysis.
 
 ```{r}
 ##########################################################################################
-baseRepository = 'E:/requests/1172/240409_orbitrapLumos/6TG'
+baseRepository = 'E:/requests/1163/240418_orbitrapLumos'
 ```
 
 ## Data processing
@@ -97,7 +99,7 @@ Process the fasta database.
 ```{r}
 ##########################################################################################
 ##read in the fasta file
-fastaFileName = '2024-04-17-reviewed-UP000005640-spikein.fasta'
+fastaFileName = '2024-05-07-reviewed-UP000000589-spikein.fasta'
 fastaDb = readAAStringSet(paste(baseRepository,'/databases/', fastaFileName, sep=''))
 
 
@@ -147,7 +149,7 @@ fastaIndex$detectableLength = detectableLength
 saveRDS(fastaIndex, paste(baseRepository, '/databases/',fastaFileName,'_index_trypticPeps.rds',sep=''))
 ```
 
-After the database is parsed, you can add decoys in FragPipe. Finished here for now.
+After the database is parsed, you can add decoys in FragPipe. If you are going to use it with DIA-NN, there is no need to add decoys. Finished here for now.
 
 ## Session info
 

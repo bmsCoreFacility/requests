@@ -14,6 +14,8 @@ This document describes processing a fasta database to get a count for the numbe
 These are packages you will need for this notebook. For exact versions used, please refer to the session info at the bottom of this notebook.
 
 ```{r}
+#| message: false
+#| warning: false
 ##########################################################################################
 library('tidyverse')
 library('Peptides')
@@ -25,7 +27,7 @@ I want to set a base directory that we can use for our analysis.
 
 ```{r}
 ##########################################################################################
-baseRepository = 'E:/requests/1172/240409_orbitrapLumos/6TG'
+baseRepository = 'E:/requests/1193/240412_orbitrapLumos'
 ```
 
 ## Data processing
@@ -42,13 +44,13 @@ fastaIndex = tibble('metadata' = names(fastaDb)) %>%
   dplyr::mutate(accession = paste('sp|CONT', seq(1,nrow(.),1), '|', sub('sp\\|(.*)\\|','\\1', metadata), ' GN=', sub('sp\\|(.*)_.*','\\1', metadata), sep=''))
 fastaDbEdited = fastaDb
 names(fastaDbEdited) = fastaIndex$accession
-toKeep = data.frame(name = names(fastaDbEdited)[which(!grepl('HUMAN', names(fastaDbEdited)))])
+toKeep = data.frame(name = names(fastaDbEdited)[which(!grepl('MOUSE', names(fastaDbEdited)))])
 fastaSubset = fastaDbEdited[toKeep$name]
 
 
 ##make an index that matches the human one
 fastaIndexMatch = fastaIndex %>%
-  dplyr::filter(!grepl('HUMAN',accession)) %>%
+  dplyr::filter(!grepl('MOUSE',accession)) %>%
   dplyr::rename(parsed = 'accession') %>%
   dplyr::mutate(accession = sub('sp\\|(.*)\\|.*','\\1',parsed),
                 gene = sub('.*GN\\=(.*)','\\1',parsed),
@@ -57,7 +59,7 @@ fastaIndexMatch = fastaIndex %>%
   dplyr::select(accession, gene, length, species)
 
 ##save this index  
-saveRDS(fastaIndexMatch, paste(baseRepository, '/databases/crap_2024_01_15_noHuman_index.rds',sep=''))
+saveRDS(fastaIndexMatch, paste(baseRepository, '/databases/crap_2024_01_15_noMouse_index.rds',sep=''))
 
 ##loop through the database entries and calculate tryptic peptide numbers
 trypticPeptides = vector()
@@ -86,8 +88,8 @@ fastaIndexMatch$detectableLength = detectableLength
 
 
 ##save the file
-saveRDS(fastaIndexMatch, paste(baseRepository, '/databases/crap_2024_01_15_noHuman_index_trypticPeps.rds',sep=''))
-writeXStringSet(fastaSubset, paste(baseRepository, '/databases/crap_2024_01_15_noHuman.fasta',sep=''))
+saveRDS(fastaIndexMatch, paste(baseRepository, '/databases/crap_2024_01_15_noMouse_index_trypticPeps.rds',sep=''))
+writeXStringSet(fastaSubset, paste(baseRepository, '/databases/crap_2024_01_15_noMouse.fasta',sep=''))
 ```
 
 Go to FragPipe and download the human database appended with this new contaminant one. Uncheck the boxes for decoys and contaminants. Add the contaminant database generated above as a spike-in. After that, we will process the downloaded file using the code below.
@@ -97,7 +99,7 @@ Process the fasta database.
 ```{r}
 ##########################################################################################
 ##read in the fasta file
-fastaFileName = '2024-04-17-reviewed-UP000005640-spikein.fasta'
+fastaFileName = '2024-04-19-reviewed-UP000000589-spikein.fasta'
 fastaDb = readAAStringSet(paste(baseRepository,'/databases/', fastaFileName, sep=''))
 
 
@@ -147,7 +149,7 @@ fastaIndex$detectableLength = detectableLength
 saveRDS(fastaIndex, paste(baseRepository, '/databases/',fastaFileName,'_index_trypticPeps.rds',sep=''))
 ```
 
-After the database is parsed, you can add decoys in FragPipe. Finished here for now.
+After the database is parsed, you can add decoys in FragPipe. If you are going to use it with DIA-NN, there is no need to add decoys. Finished here for now.
 
 ## Session info
 
