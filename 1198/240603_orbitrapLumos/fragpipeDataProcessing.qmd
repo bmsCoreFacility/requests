@@ -24,7 +24,7 @@ I want to set a base directory that we can use for our analysis.
 
 ```{r}
 ##########################################################################################
-baseRepository = 'E:/requests/1163/240418_orbitrapLumos'
+baseRepository = 'E:/requests/1198/240603_orbitrapLumos'
 ```
 
 ## Data processing
@@ -34,12 +34,11 @@ Process the FragPipe data for all of the samples.
 ```{r}
 ##########################################################################################
 ##read in the fasta index
-annotationDb = readRDS(paste(baseRepository, '/databases/2024-05-07-reviewed-UP000000589-spikein.fasta_index_trypticPeps.rds',sep=''))
+annotationDb = readRDS(paste(baseRepository, '/databases/2024-06-04-reviewed-UP000005640-spikein.fasta_index_trypticPeps.rds',sep=''))
 
 ##read in the protein result file
-sampleList = c('IgGA','IgGB','IgGFL2','IgGFS','IgGFS2','IgGML2','IgGMS','IgGMS2',
-               'LuCA','LuCB','MILIA','MILIB','MWFL2','MWFS','MWFS2','MWML2','MWMS','MWMS2','Pi14A','Pi14B')
-foldersToProcess = c(paste('240418_1163_pk_IP_sampleIP',sampleList,'_dda1',sep=''))
+sampleList = c('1','2','3')
+foldersToProcess = c(paste('sample',sampleList,sep=''))
 for (i in 1:length(foldersToProcess)){
   proTemp = read_tsv(paste(baseRepository,'/fragpipeFirstPass/',foldersToProcess[i],'/protein.tsv',sep=''), show_col_types = FALSE) %>%
     dplyr::select(`Protein ID`,`Entry Name`, Coverage, `Protein Probability`, `Total Peptides`:`Indistinguishable Proteins`) %>%

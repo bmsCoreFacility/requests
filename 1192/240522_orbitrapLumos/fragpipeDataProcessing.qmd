@@ -24,7 +24,7 @@ I want to set a base directory that we can use for our analysis.
 
 ```{r}
 ##########################################################################################
-baseRepository = 'E:/requests/1163/240418_orbitrapLumos'
+baseRepository = 'E:/requests/1192/240522_orbitrapLumos'
 ```
 
 ## Data processing
@@ -34,12 +34,13 @@ Process the FragPipe data for all of the samples.
 ```{r}
 ##########################################################################################
 ##read in the fasta index
-annotationDb = readRDS(paste(baseRepository, '/databases/2024-05-07-reviewed-UP000000589-spikein.fasta_index_trypticPeps.rds',sep=''))
+annotationDb = readRDS(paste(baseRepository, '/databases/2024-06-05-reviewed-UP000005640-spikein.fasta_index_trypticPeps.rds',sep=''))
+virusDb = readRDS(paste(baseRepository, '/databases/KSHV_AUG_with_kaposins_86Sequences_index_trypticPeps.rds', sep='')) %>%
+  dplyr::select(accession, pringleId)
 
 ##read in the protein result file
-sampleList = c('IgGA','IgGB','IgGFL2','IgGFS','IgGFS2','IgGML2','IgGMS','IgGMS2',
-               'LuCA','LuCB','MILIA','MILIB','MWFL2','MWFS','MWFS2','MWML2','MWMS','MWMS2','Pi14A','Pi14B')
-foldersToProcess = c(paste('240418_1163_pk_IP_sampleIP',sampleList,'_dda1',sep=''))
+sampleList = c('EVb','EVc','EVd','K3b','K3c','K3d','VGb','VGc','VGd','K3VGb','K3VGc','K3VGd')
+foldersToProcess = c(paste('',sampleList,sep=''))
 for (i in 1:length(foldersToProcess)){
   proTemp = read_tsv(paste(baseRepository,'/fragpipeFirstPass/',foldersToProcess[i],'/protein.tsv',sep=''), show_col_types = FALSE) %>%
     dplyr::select(`Protein ID`,`Entry Name`, Coverage, `Protein Probability`, `Total Peptides`:`Indistinguishable Proteins`) %>%
@@ -62,6 +63,7 @@ for (i in 1:length(foldersToProcess)){
     dplyr::select(-razorObservedMods) %>%
     dplyr::filter(uniquePeptides >= 1) %>%
     dplyr::left_join(annotationDb) %>%
+    dplyr::left_join(virusDb) %>%
     dplyr::mutate(iBAQ = totalIntensity / detectablePeptides) %>%
     dplyr::arrange(-iBAQ)
   
