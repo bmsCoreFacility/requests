@@ -28,7 +28,7 @@ I want to set a base directory that we can use as a working space.
 
 ```{r}
 ##########################################################################################
-baseRepository = 'E:/requests/1193/240412_orbitrapLumos'
+baseRepository = 'E:/requests/1199/240613_orbitrapLumos'
 ```
 
 ## Data processing
@@ -39,15 +39,15 @@ Read in data from DIA-NN and process with the IQ package.
 ##########################################################################################
 ##first we can filter and parse the report data into a better format for IQ
 dia1 = read_tsv(paste(baseRepository, '/diannDia1/report.tsv',sep=''), show_col_types = FALSE) %>%
-  dplyr::mutate(File.Name = sub('.*240412_1193_NRC_sample(.*)_dia[123]\\.raw', '\\1', File.Name)) %>%
+  dplyr::mutate(File.Name = sub('.*240613_1199_tc_samplepLVx_(.*)_dia[123]\\.mzML', '\\1', File.Name)) %>%
   dplyr::filter(!grepl(';', Protein.Group))
 #
 dia2 = read_tsv(paste(baseRepository, '/diannDia2/report.tsv',sep=''), show_col_types = FALSE) %>%
-  dplyr::mutate(File.Name = sub('.*240412_1193_NRC_sample(.*)_dia[123]\\.raw', '\\1', File.Name)) %>%
+  dplyr::mutate(File.Name = sub('.*240613_1199_tc_samplepLVx_(.*)_dia[123]\\.mzML', '\\1', File.Name)) %>%
   dplyr::filter(!grepl(';', Protein.Group))
 #
 dia3 = read_tsv(paste(baseRepository, '/diannDia3/report.tsv',sep=''), show_col_types = FALSE) %>%
-  dplyr::mutate(File.Name = sub('.*240412_1193_NRC_sample(.*)_dia[123]\\.raw', '\\1', File.Name)) %>%
+  dplyr::mutate(File.Name = sub('.*240613_1199_tc_samplepLVx_(.*)_dia[123]\\.mzML', '\\1', File.Name)) %>%
   dplyr::filter(!grepl(';', Protein.Group))
 #
 raw = rbind(dia1,dia2,dia3)
@@ -65,7 +65,7 @@ iqResult = process_long_format(paste(baseRepository,'/dataProcessing/combinedFil
                            peptide_extractor = function(x) gsub("[0-9].*$", "", x))
 
 ##read in the human index
-annotationDb = readRDS(paste(baseRepository, '/databases/2024-04-19-reviewed-UP000000589-spikein.fasta_index_trypticPeps.rds',sep='')) %>%
+annotationDb = readRDS(paste(baseRepository, '/databases/2024-07-05-reviewed-UP000005640-spikein.fasta_index_trypticPeps.rds',sep='')) %>%
   dplyr::select(-species) %>%
   dplyr::filter(!grepl('sp\\|V.*',gene))
 
@@ -83,54 +83,49 @@ write.table(proData, paste(baseRepository, '/dataProcessing/parsedProteinData.ts
             col.names = TRUE, row.names = FALSE, quote = FALSE, sep = '\t')
 ```
 
-Perform differential expression analysis on these data.
+Perform differential expression analysis on the data.
 
 ```{r}
 ##########################################################################################
 ##I am going to do one-by-one comparisons
 processedData = readRDS(paste(baseRepository, '/dataProcessing/parsedProteinData.rds', sep = ''))
-#fix an error in naming
-colnames(processedData)[c(8:9)] = c('M2-B10','M2-B1')
-#conditionsToCompare = c('B10','DC')
-#controlCondition = 'B1'
-conditionsToCompare = c('B10')
-controlCondition = 'DC'
+colnames(processedData)[6] = c('M3')
+
+##
+conditionsToCompare = c('M')
+controlCondition = 'EV'
 for (i in 1:length(conditionsToCompare)){
   dat = processedData[,c(which(names(processedData) == 'accession'),
                          which(names(processedData) == 'gene'),      
-                         which(names(processedData) == paste('M1-', controlCondition, sep = '')),
-                         which(names(processedData) == paste('M2-', controlCondition, sep = '')),
-                         which(names(processedData) == paste('M3-', controlCondition, sep = '')),
-                         which(names(processedData) == paste('M4-', controlCondition, sep = '')),
-                         which(names(processedData) == paste('M1-', conditionsToCompare[i], sep = '')),
-                         which(names(processedData) == paste('M2-', conditionsToCompare[i], sep = '')),
-                         which(names(processedData) == paste('M3-', conditionsToCompare[i], sep = '')),
-                         which(names(processedData) == paste('M4-', conditionsToCompare[i], sep = '')))]
-  dat$samples1234 = rowSums(is.na(dat[,3:6]))
-  dat$samples5678 = rowSums(is.na(dat[,7:10]))
-  colnames(dat)[3:6] = c('cont_rep1','cont_rep2','cont_rep3','cont_rep4')
-  colnames(dat)[7:10] = c('treat_rep1','treat_rep2','treat_rep3','treat_rep4')
+                         which(names(processedData) == paste(controlCondition,'1', sep = '')),
+                         which(names(processedData) == paste(controlCondition,'2', sep = '')),
+                         which(names(processedData) == paste(controlCondition,'3', sep = '')),
+                         which(names(processedData) == paste(conditionsToCompare[i],'1', sep = '')),
+                         which(names(processedData) == paste(conditionsToCompare[i],'2', sep = '')),
+                         which(names(processedData) == paste(conditionsToCompare[i],'3', sep = '')))]
+  dat$samples123 = rowSums(is.na(dat[,3:5]))
+  dat$samples456 = rowSums(is.na(dat[,6:8]))
+  colnames(dat)[3:5] = c('cont_rep1','cont_rep2','cont_rep3')
+  colnames(dat)[6:8] = c('treat_rep1','treat_rep2','treat_rep3')
   #
   datFiltered = as.data.frame(dat) %>%
-    dplyr::filter(samples1234 < 2 | samples5678 < 2) %>%
-    dplyr::mutate(cont_rep1 = ifelse(samples1234 == 4, min(cont_rep1, na.rm = TRUE), cont_rep1),
-                  cont_rep2 = ifelse(samples1234 == 4, min(cont_rep2, na.rm = TRUE), cont_rep2),
-                  cont_rep3 = ifelse(samples1234 == 4, min(cont_rep3, na.rm = TRUE), cont_rep3),
-                  cont_rep4 = ifelse(samples1234 == 4, min(cont_rep4, na.rm = TRUE), cont_rep4)) %>%
-    dplyr::mutate(treat_rep1 = ifelse(samples5678 == 4, min(treat_rep1, na.rm = TRUE), treat_rep1),
-                  treat_rep2 = ifelse(samples5678 == 4, min(treat_rep2, na.rm = TRUE), treat_rep2),
-                  treat_rep3 = ifelse(samples5678 == 4, min(treat_rep3, na.rm = TRUE), treat_rep3),
-                  treat_rep4 = ifelse(samples5678 == 4, min(treat_rep4, na.rm = TRUE), treat_rep4))
+    dplyr::filter(samples123 < 2 | samples456 < 2) %>%
+    dplyr::mutate(cont_rep1 = ifelse(samples123 == 3, min(cont_rep1, na.rm = TRUE), cont_rep1),
+                  cont_rep2 = ifelse(samples123 == 3, min(cont_rep2, na.rm = TRUE), cont_rep2),
+                  cont_rep3 = ifelse(samples123 == 3, min(cont_rep3, na.rm = TRUE), cont_rep3)) %>%
+    dplyr::mutate(treat_rep1 = ifelse(samples456 == 3, min(treat_rep1, na.rm = TRUE), treat_rep1),
+                  treat_rep2 = ifelse(samples456 == 3, min(treat_rep2, na.rm = TRUE), treat_rep2),
+                  treat_rep3 = ifelse(samples456 == 3, min(treat_rep3, na.rm = TRUE), treat_rep3))
   #
   rownames(datFiltered) = datFiltered$accession
   dat.log = datFiltered %>%
-    dplyr::select(-accession, -gene, -samples1234, -samples5678)
+    dplyr::select(-accession, -gene, -samples123, -samples456)
   #dat.log = na.omit(datFiltered)
   #boxplot(dat.log, las = 2, main = 'total protein abundance')
   
   ##make a design table
-  cond = as.factor(c(rep('cont',4),
-                    rep('treat',4)))
+  cond = as.factor(c(rep('cont',3),
+                    rep('treat',3)))
   design = model.matrix(~0+cond)
   colnames(design) = gsub('cond', '', colnames(design))
   
@@ -153,9 +148,9 @@ for (i in 1:length(conditionsToCompare)){
   ##extract the data
   #head(fit4$coefficients)
   psmAnnotate = dplyr::select(forPsm, accession, gene, n_fragments, n_peptides)
-  valuesAnnotate = dplyr::select(datFiltered, accession, gene, samples1234, samples5678) %>%
-    dplyr::rename(controlValues = 'samples1234',
-                  conditionValues = 'samples5678')
+  valuesAnnotate = dplyr::select(datFiltered, accession, gene, samples123, samples456) %>%
+    dplyr::rename(controlValues = 'samples123',
+                  conditionValues = 'samples456')
   deqmsResults = tibble(outputResult(fit4, coef_col = 1)) %>%
     dplyr::rename(accession = 'gene') %>%
     dplyr::left_join(psmAnnotate) %>%
@@ -187,3 +182,7 @@ for (i in 1:length(conditionsToCompare)){
          height = 2, width = 2, useDingbats = FALSE)
 }
 ```
+
+
+
+
