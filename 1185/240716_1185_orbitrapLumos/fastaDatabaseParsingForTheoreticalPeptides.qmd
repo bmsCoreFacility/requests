@@ -1,0 +1,159 @@
+---
+title: "Theoretical peptides"
+author: "Christopher Hughes"
+format: html
+editor: visual
+---
+
+## Details
+
+This document describes processing a fasta database to get a count for the number of theoretical peptides.
+
+## Setting up the environment
+
+These are packages you will need for this notebook. For exact versions used, please refer to the session info at the bottom of this notebook.
+
+```{r}
+#| message: false
+#| warning: false
+##########################################################################################
+library('tidyverse')
+library('Peptides')
+library('OrgMassSpecR')
+library('Biostrings')
+```
+
+I want to set a base directory that we can use for our analysis.
+
+```{r}
+##########################################################################################
+baseRepository = 'E:/requests/1185/240716_1185_orbitrapLumos'
+```
+
+## Data processing
+
+Process the contaminants database.
+
+```{r}
+##########################################################################################
+##crap database processing
+fastaDb = readAAStringSet(paste(baseRepository,'/databases/crap_2024_01_15.fasta',sep=''))
+
+##define an index for each entry
+fastaIndex = tibble('metadata' = names(fastaDb)) %>%
+  dplyr::mutate(accession = paste('sp|CONT', seq(1,nrow(.),1), '|', sub('sp\\|(.*)\\|','\\1', metadata), ' GN=', sub('sp\\|(.*)_.*','\\1', metadata), sep=''))
+fastaDbEdited = fastaDb
+names(fastaDbEdited) = fastaIndex$accession
+toKeep = data.frame(name = names(fastaDbEdited)[which(!grepl('HUMAN', names(fastaDbEdited)))])
+fastaSubset = fastaDbEdited[toKeep$name]
+
+
+##make an index that matches the human one
+fastaIndexMatch = fastaIndex %>%
+  dplyr::filter(!grepl('HUMAN',accession)) %>%
+  dplyr::rename(parsed = 'accession') %>%
+  dplyr::mutate(accession = sub('sp\\|(.*)\\|.*','\\1',parsed),
+                gene = sub('.*GN\\=(.*)','\\1',parsed),
+                length = width(fastaSubset)) %>%
+  dplyr::mutate(species = 'contaminant') %>%
+  dplyr::select(accession, gene, length, species)
+
+##save this index  
+saveRDS(fastaIndexMatch, paste(baseRepository, '/databases/crap_2024_01_15_noHuman_index.rds',sep=''))
+
+##loop through the database entries and calculate tryptic peptide numbers
+trypticPeptides = vector()
+detectableLength = vector()
+for (i in 1:length(fastaSubset)){
+  #get the protein sequence
+  aaSeq = as.character(fastaSubset[[i]])
+  #digest the protein sequence...sometimes there are weird amino acids, so we assign them random masses
+  seqDigest = OrgMassSpecR::Digest(aaSeq, enzyme = 'trypsin', missed = 0, custom = list(code = c('X','U','Z','B'), mass = c(50, 60, 70, 80)))
+  #calculate the total length of the protein
+  seqDigest$pepLength = (seqDigest$stop - seqDigest$start) + 1
+  #subset the set of digested peptides based on what we normally detect in an MS experiment
+  seqDigestSub = subset(seqDigest, (seqDigest$pepLength > 5) & (seqDigest$pepLength < 31))
+  #add to the tryptic peptides vector
+  trypticPeptides = c(trypticPeptides, nrow(seqDigestSub))
+  #add to the detectable length vector
+  detectableLength = c(detectableLength, sum(seqDigestSub$pepLength, na.rm = TRUE))
+  #output a message
+  message(paste('Finished ', i, ' proteins.', sep = ''))
+}
+
+
+##add the output to our previously generated index
+fastaIndexMatch$detectablePeptides = trypticPeptides
+fastaIndexMatch$detectableLength = detectableLength
+
+
+##save the file
+saveRDS(fastaIndexMatch, paste(baseRepository, '/databases/crap_2024_01_15_noHuman_index_trypticPeps.rds',sep=''))
+writeXStringSet(fastaSubset, paste(baseRepository, '/databases/crap_2024_01_15_noHuman.fasta',sep=''))
+```
+
+Go to FragPipe and download the human database appended with this new contaminant one. Uncheck the boxes for decoys and contaminants. Add the contaminant database generated above as a spike-in. After that, we will process the downloaded file using the code below.
+
+Process the fasta database.
+
+```{r}
+##########################################################################################
+##read in the fasta file
+fastaFileName = '2024-07-18-reviewed-UP000005640-spikein.fasta'
+fastaDb = readAAStringSet(paste(baseRepository,'/databases/', fastaFileName, sep=''))
+
+
+##the snippet below
+fastaIndex = tibble('metadata' = names(fastaDb)) %>%
+  dplyr::mutate(length = width(fastaDb)) %>%
+  #dplyr::filter(!grepl('contam_sp', metadata) & !grepl('rev_sp', metadata)) %>%
+  dplyr::mutate(accession = sub(".*[sptr]\\|(.*)\\|.*$", "\\1", metadata)) %>%
+  dplyr::mutate(gene = ifelse(grepl('GN=', metadata), sub(".*GN=(.*) [PE].*$", "\\1", metadata), NA)) %>%
+  dplyr::mutate(species = ifelse(grepl('sapiens', metadata), 'human', 
+                             ifelse(grepl('\\=9606', metadata), 'human',
+                                    ifelse(grepl('musculus', metadata), 'mouse', 'other')))) %>%
+  dplyr::select(accession, gene, length, species)
+
+##save this file as a general index
+saveRDS(fastaIndex, paste(baseRepository, '/databases/',fastaFileName,'_index.rds',sep=''))
+
+
+
+##loop through the database entries and calculate tryptic peptide numbers
+trypticPeptides = vector()
+detectableLength = vector()
+for (i in 1:length(fastaDb)){
+  #get the protein sequence
+  aaSeq = as.character(fastaDb[[i]])
+  #digest the protein sequence...sometimes there are weird amino acids, so we assign them random masses
+  seqDigest = OrgMassSpecR::Digest(aaSeq, enzyme = 'trypsin', missed = 0, custom = list(code = c('X','U','Z','B'), mass = c(50, 60, 70, 80)))
+  #calculate the total length of the protein
+  seqDigest$pepLength = (seqDigest$stop - seqDigest$start) + 1
+  #subset the set of digested peptides based on what we normally detect in an MS experiment
+  seqDigestSub = subset(seqDigest, (seqDigest$pepLength > 5) & (seqDigest$pepLength < 31))
+  #add to the tryptic peptides vector
+  trypticPeptides = c(trypticPeptides, nrow(seqDigestSub))
+  #add to the detectable length vector
+  detectableLength = c(detectableLength, sum(seqDigestSub$pepLength, na.rm = TRUE))
+  #output a message
+  message(paste('Finished ', i, ' proteins.', sep = ''))
+}
+
+
+##add the output to our previously generated index
+fastaIndex$detectablePeptides = trypticPeptides
+fastaIndex$detectableLength = detectableLength
+
+
+##save the file
+saveRDS(fastaIndex, paste(baseRepository, '/databases/',fastaFileName,'_index_trypticPeps.rds',sep=''))
+```
+
+After the database is parsed, you can add decoys in FragPipe. If you are going to use it with DIA-NN, there is no need to add decoys. Finished here for now.
+
+## Session info
+
+```{r}
+##########################################################################################
+sessionInfo()
+```

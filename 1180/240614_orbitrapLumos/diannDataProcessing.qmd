@@ -28,7 +28,7 @@ I want to set a base directory that we can use as a working space.
 
 ```{r}
 ##########################################################################################
-baseRepository = 'E:/requests/1192/240610_orbitrapLumos'
+baseRepository = 'E:/requests/1180/240614_orbitrapLumos'
 ```
 
 ## Data processing
@@ -39,15 +39,15 @@ Read in data from DIA-NN and process with the IQ package.
 ##########################################################################################
 ##first we can filter and parse the report data into a better format for IQ
 dia1 = read_tsv(paste(baseRepository, '/diannDia1/report.tsv',sep=''), show_col_types = FALSE) %>%
-  dplyr::mutate(File.Name = sub('.*240610_1192_aw_(.*)_dia[123]\\.mzML', '\\1', File.Name)) %>%
+  dplyr::mutate(File.Name = sub('.*240613_1180_eldenPelagDigests_(.*)_dia[123]\\.mzML', '\\1', File.Name)) %>%
   dplyr::filter(!grepl(';', Protein.Group))
 #
 dia2 = read_tsv(paste(baseRepository, '/diannDia2/report.tsv',sep=''), show_col_types = FALSE) %>%
-  dplyr::mutate(File.Name = sub('.*240610_1192_aw_(.*)_dia[123]\\.mzML', '\\1', File.Name)) %>%
+  dplyr::mutate(File.Name = sub('.*240613_1180_eldenPelagDigests_(.*)_dia[123]\\.mzML', '\\1', File.Name)) %>%
   dplyr::filter(!grepl(';', Protein.Group))
 #
 dia3 = read_tsv(paste(baseRepository, '/diannDia3/report.tsv',sep=''), show_col_types = FALSE) %>%
-  dplyr::mutate(File.Name = sub('.*240610_1192_aw_(.*)_dia[123]\\.mzML', '\\1', File.Name)) %>%
+  dplyr::mutate(File.Name = sub('.*240613_1180_eldenPelagDigests_(.*)_dia[123]\\.mzML', '\\1', File.Name)) %>%
   dplyr::filter(!grepl(';', Protein.Group))
 #
 raw = rbind(dia1,dia2,dia3)
@@ -64,20 +64,10 @@ iqResult = process_long_format(paste(baseRepository,'/dataProcessing/combinedFil
                            filter_double_less = c("Lib.Q.Value" = "0.01", "Lib.PG.Q.Value" = "0.01"),
                            peptide_extractor = function(x) gsub("[0-9].*$", "", x))
 
-##read in the viral database so you can annotate with the gene names
-viralDatabase = readRDS(paste(baseRepository, '/databases/KSHV_AUG_with_kaposins_86Sequences_index_trypticPeps.rds',sep='')) %>%
-  #dplyr::mutate(viralGene = sub('.*\\.1 (.*) \\[.*','\\1',metadata)) %>%
-  #dplyr::mutate(accession = sub('(.*)\\.1 .*','\\1',metadata)) %>%
-  dplyr::select(-species)
-
-##do the same for the human index
-humanDatabase = readRDS(paste(baseRepository, '/databases/2024-07-08-reviewed-UP000005640-spikein.fasta_index_trypticPeps.rds',sep='')) %>%
+##read in the FASTA index
+annotationDb = readRDS(paste(baseRepository, '/databases/CCMP1756.combined.filtered90.prot_plusPandM_index_trypticPeps.rds',sep='')) %>%
   dplyr::select(-species) %>%
-  dplyr::filter(!grepl('sp\\|V.*',gene)) %>%
-  dplyr::mutate(pringleId = NA)
-
-##combine the two databases
-annotationDb = rbind(humanDatabase, viralDatabase)
+  dplyr::filter(!grepl('sp\\|V.*',gene))
 
 
 ##parse the IQ result
@@ -99,40 +89,20 @@ Perform differential expression analysis on the data.
 ##########################################################################################
 ##I am going to do one-by-one comparisons
 processedData = readRDS(paste(baseRepository, '/dataProcessing/parsedProteinData.rds', sep = ''))
-colnames(processedData)[4:21] = c('etoh_0h_1',
-                                  'ho22_0h_1',
-                                  'etoh_48h_1',
-                                  'ho22_48h_1',
-                                  'etoh_72h_1',
-                                  'ho22_72h_1',
-                                  'etoh_0h_2',
-                                  'ho22_0h_2',
-                                  'etoh_48h_2',
-                                  'ho22_48h_2',
-                                  'etoh_72h_2',
-                                  'ho22_72h_2',
-                                  'etoh_0h_3',
-                                  'ho22_0h_3',
-                                  'etoh_48h_3',
-                                  'ho22_48h_3',
-                                  'etoh_72h_3',
-                                  'ho22_72h_3')
+colnames(processedData)[6] = c('M3')
 
 ##
-#conditionsToCompare = c('etoh_48h','etoh_72h')
-#controlCondition = 'etoh_0h'
-conditionsToCompare = c('ho22_0h')
-controlCondition = 'etoh_0h'
-
+conditionsToCompare = c('M')
+controlCondition = 'EV'
 for (i in 1:length(conditionsToCompare)){
   dat = processedData[,c(which(names(processedData) == 'accession'),
                          which(names(processedData) == 'gene'),      
-                         which(names(processedData) == paste(controlCondition,'_1', sep = '')),
-                         which(names(processedData) == paste(controlCondition,'_2', sep = '')),
-                         which(names(processedData) == paste(controlCondition,'_3', sep = '')),
-                         which(names(processedData) == paste(conditionsToCompare[i],'_1', sep = '')),
-                         which(names(processedData) == paste(conditionsToCompare[i],'_2', sep = '')),
-                         which(names(processedData) == paste(conditionsToCompare[i],'_3', sep = '')))]
+                         which(names(processedData) == paste(controlCondition,'1', sep = '')),
+                         which(names(processedData) == paste(controlCondition,'2', sep = '')),
+                         which(names(processedData) == paste(controlCondition,'3', sep = '')),
+                         which(names(processedData) == paste(conditionsToCompare[i],'1', sep = '')),
+                         which(names(processedData) == paste(conditionsToCompare[i],'2', sep = '')),
+                         which(names(processedData) == paste(conditionsToCompare[i],'3', sep = '')))]
   dat$samples123 = rowSums(is.na(dat[,3:5]))
   dat$samples456 = rowSums(is.na(dat[,6:8]))
   colnames(dat)[3:5] = c('cont_rep1','cont_rep2','cont_rep3')

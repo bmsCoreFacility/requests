@@ -1,0 +1,69 @@
+---
+title: "IP sample comparisons"
+author: "Christopher Hughes"
+format: html
+editor: visual
+---
+
+## Details
+
+This document describes processing of FragPipe results to compare IP samples.
+
+## Setting up the environment
+
+These are packages you will need for this notebook. For exact versions used, please refer to the session info at the bottom of this notebook.
+
+```{r}
+#| message: false
+#| warning: false
+##########################################################################################
+library('tidyverse')
+```
+
+I want to set a base directory that we can use for our analysis.
+
+```{r}
+##########################################################################################
+baseRepository = 'E:/requests/1192/240522_orbitrapLumos'
+```
+
+## Data processing
+
+Process the FragPipe data for all of the samples.
+
+```{r}
+##########################################################################################
+##read in the results files
+sampleNames = c('EVb','EVc','EVd','K3b','K3c','K3d','K3VGb','K3VGc','K3VGd','VGb','VGc','VGd')
+proCombined = tibble()
+for (i in 1:length(sampleNames)){
+  tempPro = read_tsv(paste(baseRepository, '/fragpipeFirstPass/',sampleNames[i],'/proteinProcessed.tsv',sep=''),show_col_types = FALSE) %>%
+    dplyr::filter(!grepl('CONT',gene) & !grepl('KRT',gene) & uniquePeptides > 1) %>%
+    dplyr::mutate(dataset = sampleNames[i]) %>%
+    dplyr::select(dataset, accession, gene, pringleId, uniquePeptides, razorPeptides, detectablePeptides, iBAQ)
+  #
+  proCombined = rbind(proCombined, tempPro)
+}
+
+
+##reshape the data
+proWide = proCombined %>%
+  dplyr::select(dataset:pringleId, iBAQ) %>%
+  tidyr::pivot_wider(id_cols = c('accession','gene','pringleId'), names_from = 'dataset', values_from = 'iBAQ')
+proWide$naSet1 = rowSums(is.na(proWide[,4:6]))
+proWide$naSet2 = rowSums(is.na(proWide[,7:9]))
+proWide$naSet3 = rowSums(is.na(proWide[,10:12]))
+proWide$naSet4 = rowSums(is.na(proWide[,13:15]))
+##filter
+proFilter = proWide %>%
+  dplyr::filter(naSet1 < 2 | naSet2 < 2 | naSet3 < 2 | naSet4 < 2) %>%
+  dplyr::rename(virusAccession = 'pringleId') %>%
+  dplyr::select(accession:VGd)
+
+##save the data
+write_tsv(proFilter, paste(baseRepository, '/dataProcessing/dataset_combinedFilteredProteinData.tsv',sep=''))
+
+write_tsv()
+```
+
+
