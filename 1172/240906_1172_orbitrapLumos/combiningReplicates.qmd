@@ -1,0 +1,81 @@
+---
+title: "combiningReplicates"
+author: "Christopher Hughes"
+format: html
+---
+
+## Details
+
+This document describes processing the output from FragPipe replicates into a single file.
+
+## Setting up the environment
+
+These are packages you will need for this notebook. For exact versions used, please refer to the session info at the bottom of this notebook.
+
+```{r}
+#| message: false
+#| warning: false
+##########################################################################################
+library('tidyverse')
+```
+
+I want to set a base directory that we can use for our analysis.
+
+```{r}
+##########################################################################################
+baseRepository = 'E:/requests/1172'
+```
+
+## Data processing
+
+Combine the replicate data.
+
+```{r}
+##########################################################################################
+samplesIdentifiers = c('/240613_1172_orbitrapLumos/fragpipeFirstPass/ev_repA',
+                       '/240613_1172_orbitrapLumos/fragpipeFirstPass/ev_repB',
+                       '/240613_1172_orbitrapLumos/fragpipeFirstPass/ev_repC',
+                       '/240906_1172_orbitrapLumos/fragpipeFirstPass/sampleEV',
+                       '/240613_1172_orbitrapLumos/fragpipeFirstPass/m_repA',
+                       '/240613_1172_orbitrapLumos/fragpipeFirstPass/m_repB',
+                       '/240613_1172_orbitrapLumos/fragpipeFirstPass/m_repC',
+                       '/240906_1172_orbitrapLumos/fragpipeFirstPass/sampleM')
+
+##read in the replicate data
+allSampleData = tibble()
+for (i in 1:length(samplesIdentifiers)){
+  tempInput = read_tsv(paste(baseRepository, samplesIdentifiers[i], '/proteinProcessed.tsv', sep=''), show_col_types = FALSE) %>%
+    dplyr::mutate('replicate' = sub('.*Pass\\/(.*)','\\1',samplesIdentifiers[i])) %>%
+    dplyr::filter(!grepl('CONT', gene)) %>%
+    dplyr::mutate(gene = ifelse(grepl('MINIT', gene), 'BIOID_MINIT', gene)) %>%
+    dplyr::select(-indistinguishableProteins, -razorAssignedMods, -entry, -proteinProbability, -length, -detectableLength, -coverage, -species, -totalSpectralCount, -uniqueSpectralCount, -razorSpectralCount)
+  
+  #
+  allSampleData = rbind(allSampleData, tempInput)
+}
+
+##change ID for the final set
+allSampleData$replicate = ifelse(grepl('sampleEV', allSampleData$replicate), 'ev_repD', allSampleData$replicate)
+allSampleData$replicate = ifelse(grepl('sampleM', allSampleData$replicate), 'm_repD', allSampleData$replicate)
+
+
+#widen
+sampleWide = allSampleData %>%
+  tidyr::pivot_wider(id_cols = c('accession', 'gene', 'detectablePeptides'), names_from = 'replicate', values_from = c('totalPeptides','uniquePeptides','razorPeptides','totalIntensity', 'uniqueIntensity', 'razorIntensity', 'iBAQ'))
+
+
+##replace NA values
+sampleWide[4:59][is.na(sampleWide[4:59])] = 0
+
+##save the data
+saveRDS(sampleWide, paste(baseRepository,'/240906_1172_orbitrapLumos/fragpipeFirstPass/combinedSampleData.rds',sep=''))
+write_tsv(sampleWide, paste(baseRepository,'/240906_1172_orbitrapLumos/fragpipeFirstPass/combinedSampleData.tsv',sep=''),
+          quote = 'none')
+```
+
+
+
+
+
+
+

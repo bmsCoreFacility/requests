@@ -1,0 +1,70 @@
+---
+title: "fragpipeOutputProcessing"
+author: "Christopher Hughes"
+format: html
+editor: visual
+---
+
+## Details
+
+This document describes processing the output from FragPipe.
+
+## Setting up the environment
+
+These are packages you will need for this notebook. For exact versions used, please refer to the session info at the bottom of this notebook.
+
+```{r}
+#| message: false
+#| warning: false
+##########################################################################################
+library('tidyverse')
+```
+
+I want to set a base directory that we can use for our analysis.
+
+```{r}
+##########################################################################################
+baseRepository = 'E:/requests/1178/240911_1178_qexactive'
+```
+
+## Data processing
+
+Process the FragPipe data for all of the samples.
+
+```{r}
+##########################################################################################
+##read in the fasta index
+annotationDb = readRDS(paste(baseRepository, '/databases/2024-09-13-reviewed-UP000009136-spikein.fasta_index_trypticPeps.rds',sep=''))
+
+##read in the peptide result file
+sampleList = c('Neg1','Neg2','Neg3','Neg4','Neg5','Pos1','Pos2','Pos3','Pos4','Pos5')
+foldersToProcess = c(paste('palm',sampleList,sep=''))
+peptideOutput = tibble()
+for (i in 1:length(foldersToProcess)){
+  proTemp = read_tsv(paste(baseRepository,'/fragpipeFirstPass/',foldersToProcess[i],'/peptide.tsv',sep=''), show_col_types = FALSE) %>%
+    dplyr::filter(grepl('DHE3',Gene)) %>%
+    dplyr::filter(grepl('C',Peptide)) %>%
+    dplyr::select(Peptide, Intensity, `Assigned Modifications`) %>%
+    dplyr::rename(peptide = 'Peptide',
+                  intensity = 'Intensity',
+                  modifications = 'Assigned Modifications') %>%
+    dplyr::mutate(sample = sampleList[i])
+  #
+  peptideOutput = rbind(peptideOutput, proTemp)
+}
+
+##shift the data
+peptideWide = peptideOutput %>%
+  tidyr::pivot_wider(id_cols = c('peptide','modifications'), names_from = 'sample', values_from = 'intensity')
+
+##save the file
+write.table(peptideWide, paste(baseRepository,'/fragpipeFirstPass/peptideProcessed.tsv',sep=''),
+            quote = FALSE, sep = '\t', col.names = TRUE, row.names = FALSE)
+```
+
+## Session info
+
+```{r}
+##########################################################################################
+sessionInfo()
+```

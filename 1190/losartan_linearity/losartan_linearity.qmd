@@ -1,0 +1,78 @@
+---
+title: "losartan linearity"
+author: "Christopher Hughes"
+format: html
+---
+
+## Details
+
+This document describes processing skyline area results to determine linearity of detection.
+
+## Setting up the environment
+
+These are packages you will need for this notebook. For exact versions used, please refer to the session info at the bottom of this notebook.
+
+```{r}
+##########################################################################################
+library('tidyverse')
+library('MSstatsLOBD')
+```
+
+I want to set a base directory that we can use for our analysis.
+
+```{r}
+##########################################################################################
+baseRepository = 'E:/requests/1190/losartan_linearity'
+```
+
+## Data processing
+
+Read in the skyline data and transform into a format appropriate for the LOBD tool.
+
+```{r}
+##########################################################################################
+##skyline data
+##in the calculation below I multiply the concentration because it needs to be a high value otherwise the script wont work
+skyData = read_csv(paste(baseRepository, '/moleculeTransitionResults_standardCurveSet2.csv',sep=''), show_col_types = FALSE) %>%
+  dplyr::rename(NAME = 'Molecule',
+                CONCENTRATION = 'Analyte Concentration',
+                rawIntensity = 'Area',
+                TRANSITION = 'Product Mz', 
+                replicateName = 'Replicate Name') %>%
+  dplyr::filter(NAME == 'losartan') %>%
+  dplyr::select(NAME, CONCENTRATION, rawIntensity, TRANSITION, replicateName) %>%
+  dplyr::group_by(NAME, CONCENTRATION, replicateName) %>%
+  dplyr::summarise(INTENSITY = sum(rawIntensity, na.rm = TRUE)) %>%
+  dplyr::select(-replicateName) %>%
+  dplyr::ungroup() %>%
+  dplyr::mutate(REPLICATE = as.integer(rep(seq(1,3,1),9))) %>%
+  dplyr::mutate(CONCENTRATION = CONCENTRATION * 10000) %>%
+  dplyr::filter(CONCENTRATION != 5000 & CONCENTRATION != 2500)
+
+##need to add a fake blank that seems to be required by the LOB/LOD tool
+blanks = tibble(NAME = rep('losartan',3),
+                CONCENTRATION = rep(0,3),
+                INTENSITY = rep(0,3),
+                REPLICATE = as.integer(seq(1,3,1)))
+##
+skyDataOut = rbind(blanks, skyData)
+```
+
+Calculated the LOB/LOD.
+
+```{r}
+##########################################################################################
+##LOB/LOD calculation
+skyQuantOut = nonlinear_quantlim(skyDataOut)
+skyQuantOut
+
+
+###
+plot_quantlim(spikeindata = skyDataOut, quantlim_out = skyQuantOut, address =  FALSE)
+```
+
+
+
+
+
+
