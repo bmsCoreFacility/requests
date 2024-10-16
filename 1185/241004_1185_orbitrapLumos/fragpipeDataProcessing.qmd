@@ -40,7 +40,7 @@ annotationDb = readRDS(paste(baseRepository, '/databases/2024-10-07-reviewed-UP0
 sampleList = c('B','C','D','E','G','H','I','J','K','L','M','N')
 foldersToProcess = c(paste('sample',sampleList,sep=''))
 for (i in 1:length(foldersToProcess)){
-  proTemp = read_tsv(paste(baseRepository,'/fragpipeFirstPass/',foldersToProcess[i],'/protein.tsv',sep=''), show_col_types = FALSE) %>%
+  proTemp = read_tsv(paste(baseRepository,'/fragpipeSecondPass/',foldersToProcess[i],'/protein.tsv',sep=''), show_col_types = FALSE) %>%
     dplyr::select(`Protein ID`,`Entry Name`, Coverage, `Protein Probability`, `Total Peptides`:`Indistinguishable Proteins`) %>%
     dplyr::rename(accession = 'Protein ID',
                   entry = 'Entry Name',
@@ -65,7 +65,7 @@ for (i in 1:length(foldersToProcess)){
     dplyr::arrange(-iBAQ)
   
   ##save the file
-  write.table(proTemp, paste(baseRepository,'/fragpipeFirstPass/',foldersToProcess[i],'/proteinProcessed.tsv',sep=''),
+  write.table(proTemp, paste(baseRepository,'/fragpipeSecondPass/',foldersToProcess[i],'/proteinProcessed.tsv',sep=''),
             quote = FALSE, sep = '\t', col.names = TRUE, row.names = FALSE)
 }
 
