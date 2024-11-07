@@ -1,0 +1,169 @@
+---
+title: "Drug compound optimization"
+author: "Christopher Hughes"
+format: html
+---
+
+## Details
+
+This document describes processing the output from Skyline related to optimization of drug compounds.
+
+## Setting up the environment
+
+These are packages you will need for this notebook. For exact versions used, please refer to the session info at the bottom of this notebook.
+
+```{r}
+#| message: false
+#| warning: false
+##########################################################################################
+library('tidyverse')
+library('ggpmisc')
+```
+
+I want to set a base directory that we can use for our analysis.
+
+```{r}
+##########################################################################################
+baseRepository = 'E:/requests/1205/241105_1205_qexactive'
+```
+
+## Data processing
+
+The raw data have already been processed and integrated in Skyline. From here, we will use these data for downstream analyses.
+
+```{r}
+##########################################################################################
+##read in the data from Skyline
+skyRaw = read_csv(paste(baseRepository,'/skyline/setA_moleculeTransitionResults.csv',sep=''),show_col_types = FALSE) %>%
+  dplyr::filter(`Product Mz` == 111.01 | `Product Mz` == 113.02) %>%
+  dplyr::filter(!grepl('qc_',`Replicate Name`) & !grepl('unknown',`Replicate Name`)) %>%
+  dplyr::select(`Replicate Name`, `Product Mz`, Area, Background, `Analyte Concentration`) %>%
+  dplyr::rename(sampleName = `Replicate Name`,
+                fragmentMass = `Product Mz`,
+                signal = 'Area',
+                noise = 'Background',
+                concentration = `Analyte Concentration`) %>%
+  dplyr::mutate(sampleType = ifelse(fragmentMass == 111.01, 'sample', 
+                                    ifelse(grepl('blank',sampleName),'blank','ilis')),
+                sampleSet = ifelse(grepl('setA',sampleName),'setA',
+                                   ifelse(grepl('setB',sampleName),'setB',
+                                          ifelse(grepl('setC',sampleName),'setC','blank')))) %>%
+  dplyr::mutate(sampleReplicate = sub('.*_rep(.*)','\\1',sampleName)) %>%
+  dplyr::mutate(sampleNumber = sub('set[ABC]_(.*)_.*','\\1',sampleName)) %>%
+  dplyr::filter(!grepl('blank',sampleName))
+
+
+##reshape the data
+skyWide = skyRaw %>%
+  tidyr::pivot_wider(id_cols = c('sampleName','sampleSet','sampleNumber','sampleReplicate'), names_from = 'sampleType', values_from = 'signal') %>%
+  dplyr::mutate(relativeToIlis = sample/ilis)
+
+
+#save the data
+saveRDS(skyWide, paste(baseRepository,'/dataProcessing/dataset_processedStandardData.rds',sep=''))
+write.table(skyWide, paste(baseRepository,'/dataProcessing/dataset_processedStandardData.tsv',sep=''),
+            sep = '\t', quote = FALSE, row.names = FALSE)
+```
+
+Calculate the matrix effect (ME), recovery (RE), and process efficiency (PE).
+
+```{r}
+##########################################################################################
+##read in the processed data
+meData = readRDS(paste(baseRepository,'/dataProcessing/dataset_processedStandardData.rds',sep='')) %>%
+  dplyr::select(sampleNumber, sampleSet, sampleReplicate, relativeToIlis) %>%
+  tidyr::pivot_wider(id_cols = c('sampleNumber','sampleReplicate'), names_from = 'sampleSet', values_from = 'relativeToIlis') %>%
+  dplyr::mutate(ME = (setC / setA)*100,
+                RE = (setB / setC)*100,
+                PE = (ME * RE)/100)
+meData
+```
+
+Plot the different standard curves.
+
+```{r}
+##########################################################################################
+##read in the processed data
+standards = rep(c(500,250,125,62.5,31.25,15.625),each = 3) #in uM
+stdData = readRDS(paste(baseRepository,'/dataProcessing/dataset_processedStandardData.rds',sep='')) %>%
+  dplyr::select(sampleNumber, sampleSet, sampleReplicate, relativeToIlis) %>%
+  dplyr::mutate(sampleConcentration = rep(standards,3))
+
+
+##setA
+dat = dplyr::filter(stdData, grepl('setA',sampleSet))
+ggplot(dat, aes(sampleConcentration, relativeToIlis)) +
+  stat_poly_line() +
+  stat_poly_eq(use_label(c("eq", "R2")),rr.digits = 6) +
+  geom_point()
+
+##setB
+dat = dplyr::filter(stdData, grepl('setB',sampleSet))
+ggplot(dat, aes(sampleConcentration, relativeToIlis)) +
+  stat_poly_line() +
+  stat_poly_eq(use_label(c("eq", "R2")),rr.digits = 6) +
+  geom_point()
+
+##setC
+dat = dplyr::filter(stdData, grepl('setC',sampleSet))
+ggplot(dat, aes(sampleConcentration, relativeToIlis)) +
+  stat_poly_line() +
+  stat_poly_eq(use_label(c("eq", "R2")),rr.digits = 6) +
+  geom_point()
+```
+
+Use these equations to determine the concentration of the unknowns.
+
+```{r}
+##########################################################################################
+##get the unknown data
+dilutionFactor = 200
+unkData = read_csv(paste(baseRepository,'/skyline/setA_moleculeTransitionResults.csv',sep=''),show_col_types = FALSE) %>%
+  dplyr::filter(`Product Mz` == 111.01 | `Product Mz` == 113.02) %>%
+  dplyr::filter(grepl('unknown',`Replicate Name`)) %>%
+  dplyr::select(`Replicate Name`, `Product Mz`, Area, Background, `Analyte Concentration`) %>%
+  dplyr::rename(sampleName = `Replicate Name`,
+                fragmentMass = `Product Mz`,
+                signal = 'Area',
+                noise = 'Background',
+                concentration = `Analyte Concentration`) %>%
+  dplyr::mutate(sampleType = ifelse(fragmentMass == 111.01, 'sample', 
+                                    ifelse(grepl('blank',sampleName),'blank','ilis')),
+                sampleSet = ifelse(grepl('setA',sampleName),'setA',
+                                   ifelse(grepl('setB',sampleName),'setB',
+                                          ifelse(grepl('setC',sampleName),'setC','blank')))) %>%
+  dplyr::mutate(sampleReplicate = sub('.*_rep(.*)','\\1',sampleName)) %>%
+  dplyr::mutate(sampleNumber = sub('set[ABC]_(.*)_.*','\\1',sampleName)) %>%
+  tidyr::pivot_wider(id_cols = c('sampleName','sampleSet','sampleNumber','sampleReplicate'), names_from = 'sampleType', values_from = 'signal') %>%
+  dplyr::mutate(relativeToIlis = sample/ilis) %>%
+  dplyr::mutate(concentration = ((relativeToIlis - 0.0781)/0.0221)*dilutionFactor) #this is in nM, so need to adjust by 1000
+
+
+y = 0.0781 + 0.0221x
+
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
