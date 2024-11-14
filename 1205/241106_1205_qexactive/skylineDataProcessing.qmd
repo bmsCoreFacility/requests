@@ -25,7 +25,7 @@ I want to set a base directory that we can use for our analysis.
 
 ```{r}
 ##########################################################################################
-baseRepository = 'E:/requests/1205/241105_1205_qexactive'
+baseRepository = 'E:/requests/1205/241106_1205_qexactive'
 ```
 
 ## Data processing
@@ -105,11 +105,13 @@ dat = dplyr::filter(stdData, grepl('setA',sampleSet))
 ggplot(dat, aes(sampleConcentration, relativeToIlis)) +
   stat_poly_line() +
   stat_poly_eq(use_label(c("eq", "R2")),rr.digits = 6) +
+  stat_fit_deviations() +
   geom_point(shape = 21, stroke = 1, size = 2) + 
   labs(x = 'Standard Concentration (uM)', y = 'Area Relative to Internal Standard', title = 'Set A Linearity') +
   theme_classic()
 ggsave(paste(baseRepository,'/dataProcessing/point_standardCurve_setA.png',sep=''),
        width = 6, height = 6)
+summary(lm(relativeToIlis ~ sampleConcentration, data = dat))
 
 ##setB
 dat = dplyr::filter(stdData, grepl('setB',sampleSet))
@@ -122,10 +124,6 @@ ggplot(dat, aes(sampleConcentration, relativeToIlis)) +
 ggsave(paste(baseRepository,'/dataProcessing/point_standardCurve_setB.png',sep=''),
        width = 6, height = 6)
 summary(lm(relativeToIlis ~ sampleConcentration, data = dat))
-LOD = (3*0.000177)/0.022
-LOD
-LOQ = (10*0.000177)/0.022
-LOQ
 
 ##setC
 dat = dplyr::filter(stdData, grepl('setC',sampleSet))
@@ -163,7 +161,7 @@ unkData = read_csv(paste(baseRepository,'/skyline/setA_moleculeTransitionResults
   dplyr::mutate(sampleNumber = sub('set[ABC]_(.*)_.*','\\1',sampleName)) %>%
   tidyr::pivot_wider(id_cols = c('sampleName','sampleSet','sampleNumber','sampleReplicate'), names_from = 'sampleType', values_from = 'signal') %>%
   dplyr::mutate(relativeToIlis = sample/ilis) %>%
-  dplyr::mutate(concentration = (((relativeToIlis - 0.0781)/0.0221)*dilutionFactor)/1000) #this is in nM, so need to adjust by 1000
+  dplyr::mutate(concentration = (((relativeToIlis - 0.0355)/0.024)*dilutionFactor)/1000) #this is in nM, so need to adjust by 1000
 
 #
 unkSummary = unkData %>%
@@ -184,7 +182,7 @@ stdData = readRDS(paste(baseRepository,'/dataProcessing/dataset_processedStandar
   dplyr::select(sampleNumber, sampleSet, sampleReplicate, relativeToIlis) %>%
   dplyr::mutate(sampleConcentration = rep(standards,3)) %>%
   dplyr::filter(sampleSet == 'setB') %>%
-  dplyr::mutate(calcConcentration = (relativeToIlis - 0.0781)/0.0221) %>%
+  dplyr::mutate(calcConcentration = (relativeToIlis - 0.0355)/0.024) %>%
   dplyr::mutate(acc = (calcConcentration/sampleConcentration)*100) %>%
   dplyr::group_by(sampleNumber, sampleSet, sampleConcentration) %>%
   dplyr::summarise(mean_acc = mean(acc, na.rm = TRUE), sd_acc = sd(acc, na.rm = TRUE)) %>%
