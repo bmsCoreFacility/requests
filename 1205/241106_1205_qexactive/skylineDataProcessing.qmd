@@ -1,0 +1,217 @@
+---
+title: "Drug compound optimization"
+author: "Christopher Hughes"
+format: html
+---
+
+## Details
+
+This document describes processing the output from Skyline related to optimization of drug compounds.
+
+## Setting up the environment
+
+These are packages you will need for this notebook. For exact versions used, please refer to the session info at the bottom of this notebook.
+
+```{r}
+#| message: false
+#| warning: false
+##########################################################################################
+library('tidyverse')
+library('ggpmisc')
+library('pastecs')
+```
+
+I want to set a base directory that we can use for our analysis.
+
+```{r}
+##########################################################################################
+baseRepository = 'E:/requests/1205/241106_1205_qexactive'
+```
+
+## Data processing
+
+The raw data have already been processed and integrated in Skyline. From here, we will use these data for downstream analyses.
+
+```{r}
+##########################################################################################
+##read in the data from Skyline
+standards = rep(c(500,250,125,62.5,31.25,15.625),each = 3) #in uM
+skyRaw = read_csv(paste(baseRepository,'/skyline/setA_moleculeTransitionResults.csv',sep=''),show_col_types = FALSE) %>%
+  dplyr::filter(`Product Mz` == 111.01 | `Product Mz` == 113.02) %>%
+  dplyr::filter(!grepl('qc_',`Replicate Name`) & !grepl('unknown',`Replicate Name`)) %>%
+  dplyr::select(`Replicate Name`, `Product Mz`, Area, Background, `Analyte Concentration`) %>%
+  dplyr::rename(sampleName = `Replicate Name`,
+                fragmentMass = `Product Mz`,
+                signal = 'Area',
+                noise = 'Background',
+                concentration = `Analyte Concentration`) %>%
+  dplyr::mutate(sampleType = ifelse(fragmentMass == 111.01, 'sample', 
+                                    ifelse(grepl('blank',sampleName),'blank','ilis')),
+                sampleSet = ifelse(grepl('setA',sampleName),'setA',
+                                   ifelse(grepl('setB',sampleName),'setB',
+                                          ifelse(grepl('setC',sampleName),'setC','blank')))) %>%
+  dplyr::mutate(sampleReplicate = sub('.*_rep(.*)','\\1',sampleName)) %>%
+  dplyr::mutate(sampleNumber = sub('set[ABC]_(.*)_.*','\\1',sampleName)) %>%
+  dplyr::filter(!grepl('blank',sampleName))
+
+
+##reshape the data
+skyWide = skyRaw %>%
+  tidyr::pivot_wider(id_cols = c('sampleName','sampleSet','sampleNumber','sampleReplicate'), names_from = 'sampleType', values_from = 'signal') %>%
+  dplyr::mutate(relativeToIlis = sample/ilis)
+
+
+#save the data
+saveRDS(skyWide, paste(baseRepository,'/dataProcessing/dataset_processedStandardData.rds',sep=''))
+write.table(skyWide, paste(baseRepository,'/dataProcessing/dataset_processedStandardData.tsv',sep=''),
+            sep = '\t', quote = FALSE, row.names = FALSE)
+```
+
+Calculate the matrix effect (ME), recovery (RE), and process efficiency (PE).
+
+```{r}
+##########################################################################################
+##read in the processed data
+standards = rep(c(500,250,125,62.5,31.25,15.625),each = 3) #in uM
+meData = readRDS(paste(baseRepository,'/dataProcessing/dataset_processedStandardData.rds',sep='')) %>%
+  dplyr::select(sampleNumber, sampleSet, sampleReplicate, relativeToIlis) %>%
+  tidyr::pivot_wider(id_cols = c('sampleNumber','sampleReplicate'), names_from = 'sampleSet', values_from = 'relativeToIlis') %>%
+  dplyr::mutate(ME = (setC / setA)*100,
+                RE = (setB / setC)*100,
+                PE = (ME * RE)/100) %>%
+  dplyr::mutate(standardConcentration = standards) %>%
+  dplyr::group_by(sampleNumber, standardConcentration) %>%
+  dplyr::summarise(setA = mean(setA), setB = mean(setB), setC = mean(setC), ME = mean(ME), RE = mean(RE), PE = mean(PE))
+meData
+
+#
+write.table(meData, paste(baseRepository,'/dataProcessing/dataset_efficiencyData.tsv',sep=''),
+            sep = '\t', quote = FALSE, row.names = FALSE)
+```
+
+Plot the different standard curves.
+
+```{r}
+##########################################################################################
+##read in the processed data
+standards = rep(c(500,250,125,62.5,31.25,15.625),each = 3) #in uM
+stdData = readRDS(paste(baseRepository,'/dataProcessing/dataset_processedStandardData.rds',sep='')) %>%
+  dplyr::select(sampleNumber, sampleSet, sampleReplicate, relativeToIlis) %>%
+  dplyr::mutate(sampleConcentration = rep(standards,3))
+
+
+##setA
+dat = dplyr::filter(stdData, grepl('setA',sampleSet))
+ggplot(dat, aes(sampleConcentration, relativeToIlis)) +
+  stat_poly_line() +
+  stat_poly_eq(use_label(c("eq", "R2")),rr.digits = 6) +
+  stat_fit_deviations() +
+  geom_point(shape = 21, stroke = 1, size = 2) + 
+  labs(x = 'Standard Concentration (uM)', y = 'Area Relative to Internal Standard', title = 'Set A Linearity') +
+  theme_classic()
+ggsave(paste(baseRepository,'/dataProcessing/point_standardCurve_setA.png',sep=''),
+       width = 6, height = 6)
+summary(lm(relativeToIlis ~ sampleConcentration, data = dat))
+
+##setB
+dat = dplyr::filter(stdData, grepl('setB',sampleSet))
+ggplot(dat, aes(sampleConcentration, relativeToIlis)) +
+  stat_poly_line() +
+  stat_poly_eq(use_label(c("eq", "R2")),rr.digits = 6) +
+  geom_point(shape = 21, stroke = 1, size = 2) + 
+  labs(x = 'Standard Concentration (uM)', y = 'Area Relative to Internal Standard', title = 'Set B Linearity') +
+  theme_classic()
+ggsave(paste(baseRepository,'/dataProcessing/point_standardCurve_setB.png',sep=''),
+       width = 6, height = 6)
+summary(lm(relativeToIlis ~ sampleConcentration, data = dat))
+
+##setC
+dat = dplyr::filter(stdData, grepl('setC',sampleSet))
+ggplot(dat, aes(sampleConcentration, relativeToIlis)) +
+  stat_poly_line() +
+  stat_poly_eq(use_label(c("eq", "R2")),rr.digits = 6) +
+  geom_point(shape = 21, stroke = 1, size = 2) + 
+  labs(x = 'Standard Concentration (uM)', y = 'Area Relative to Internal Standard', title = 'Set C Linearity') +
+  theme_classic()
+ggsave(paste(baseRepository,'/dataProcessing/point_standardCurve_setC.png',sep=''),
+       width = 6, height = 6)
+```
+
+Use these equations to determine the concentration of the unknowns.
+
+```{r}
+##########################################################################################
+##get the unknown data
+dilutionFactor = 200
+unkData = read_csv(paste(baseRepository,'/skyline/setA_moleculeTransitionResults.csv',sep=''),show_col_types = FALSE) %>%
+  dplyr::filter(`Product Mz` == 111.01 | `Product Mz` == 113.02) %>%
+  dplyr::filter(grepl('unknown',`Replicate Name`)) %>%
+  dplyr::select(`Replicate Name`, `Product Mz`, Area, Background, `Analyte Concentration`) %>%
+  dplyr::rename(sampleName = `Replicate Name`,
+                fragmentMass = `Product Mz`,
+                signal = 'Area',
+                noise = 'Background',
+                concentration = `Analyte Concentration`) %>%
+  dplyr::mutate(sampleType = ifelse(fragmentMass == 111.01, 'sample', 
+                                    ifelse(grepl('blank',sampleName),'blank','ilis')),
+                sampleSet = ifelse(grepl('n1',sampleName),'unknown1',
+                                   ifelse(grepl('n2',sampleName),'unknown2',
+                                          ifelse(grepl('n3',sampleName),'unknown3','blank')))) %>%
+  dplyr::mutate(sampleReplicate = sub('.*_rep(.*)','\\1',sampleName)) %>%
+  dplyr::mutate(sampleNumber = sub('set[ABC]_(.*)_.*','\\1',sampleName)) %>%
+  tidyr::pivot_wider(id_cols = c('sampleName','sampleSet','sampleNumber','sampleReplicate'), names_from = 'sampleType', values_from = 'signal') %>%
+  dplyr::mutate(relativeToIlis = sample/ilis) %>%
+  dplyr::mutate(concentration = (((relativeToIlis - 0.0355)/0.024)*dilutionFactor)/1000) #this is in nM, so need to adjust by 1000
+
+#
+unkSummary = unkData %>%
+  dplyr::group_by(sampleSet) %>%
+  dplyr::summarise(concentrationMean = mean(concentration), concentrationSD = sd(concentration))
+#
+unkData
+unkSummary
+```
+
+Calculate the original concentrations for the standards based on the standard curve data.
+
+```{r}
+##########################################################################################
+##get the standard data
+standards = rep(c(500,250,125,62.5,31.25,15.625),each = 3) #in uM
+stdData = readRDS(paste(baseRepository,'/dataProcessing/dataset_processedStandardData.rds',sep='')) %>%
+  dplyr::select(sampleNumber, sampleSet, sampleReplicate, relativeToIlis) %>%
+  dplyr::mutate(sampleConcentration = rep(standards,3)) %>%
+  dplyr::filter(sampleSet == 'setB') %>%
+  dplyr::mutate(calcConcentration = (relativeToIlis - 0.0355)/0.024) %>%
+  dplyr::mutate(acc = (calcConcentration/sampleConcentration)*100) %>%
+  dplyr::group_by(sampleNumber, sampleSet, sampleConcentration) %>%
+  dplyr::summarise(mean_acc = mean(acc, na.rm = TRUE), sd_acc = sd(acc, na.rm = TRUE)) %>%
+  dplyr::mutate(cv = (sd_acc/mean_acc)*100)
+
+#
+write.table(stdData, paste(baseRepository,'/dataProcessing/dataset_accuracyData.tsv',sep=''),
+            sep = '\t', quote = FALSE, row.names = FALSE)
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
