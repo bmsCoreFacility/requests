@@ -1,0 +1,79 @@
+---
+title: "fragpipeOutputProcessing"
+author: "Christopher Hughes"
+format: html
+editor: visual
+---
+
+## Details
+
+This document describes processing the output from FragPipe.
+
+## Setting up the environment
+
+These are packages you will need for this notebook. For exact versions used, please refer to the session info at the bottom of this notebook.
+
+```{r}
+#| message: false
+#| warning: false
+##########################################################################################
+library('tidyverse')
+```
+
+I want to set a base directory that we can use for our analysis.
+
+```{r}
+##########################################################################################
+baseRepository = 'E:/requests/1172/241204_1172_orbitrapLumos'
+```
+
+## Data processing
+
+Process the FragPipe data for all of the human samples.
+
+```{r}
+##########################################################################################
+##read in the fasta index
+annotationDb = readRDS(paste(baseRepository, '/databases/2024-12-05-reviewed-UP000005640-spikein.fasta_index_trypticPeps.rds',sep=''))
+
+##read in the protein result file
+sampleList = c('EV2','M_GFP2','M2','MAL2')
+foldersToProcess = c(paste('',sampleList,sep=''))
+for (i in 1:length(foldersToProcess)){
+  proTemp = read_tsv(paste(baseRepository,'/fragpipeFirstPass/',foldersToProcess[i],'/protein.tsv',sep=''), show_col_types = FALSE) %>%
+    dplyr::select(`Protein ID`,`Entry Name`, Coverage, `Protein Probability`, `Total Peptides`:`Indistinguishable Proteins`) %>%
+    dplyr::rename(accession = 'Protein ID',
+                  entry = 'Entry Name',
+                  coverage = 'Coverage',
+                  proteinProbability = 'Protein Probability',
+                  totalPeptides = 'Total Peptides',
+                  uniquePeptides = 'Unique Peptides',
+                  razorPeptides = 'Razor Peptides',
+                  totalSpectralCount = 'Total Spectral Count',
+                  uniqueSpectralCount = 'Unique Spectral Count',
+                  razorSpectralCount = 'Razor Spectral Count',
+                  totalIntensity = 'Total Intensity',
+                  uniqueIntensity = 'Unique Intensity',
+                  razorIntensity = 'Razor Intensity',
+                  razorAssignedMods = 'Razor Assigned Modifications',
+                  razorObservedMods = 'Razor Observed Modifications',
+                  indistinguishableProteins = 'Indistinguishable Proteins') %>%
+    dplyr::select(-razorObservedMods) %>%
+    dplyr::filter(uniquePeptides >= 1) %>%
+    dplyr::left_join(annotationDb) %>%
+    dplyr::mutate(iBAQ = totalIntensity / detectablePeptides) %>%
+    dplyr::arrange(-iBAQ)
+  
+  ##save the file
+  write.table(proTemp, paste(baseRepository,'/fragpipeFirstPass/',foldersToProcess[i],'/proteinProcessed.tsv',sep=''),
+            quote = FALSE, sep = '\t', col.names = TRUE, row.names = FALSE)
+}
+
+```
+
+## Session info
+
+```{r}
+##########################################################################################
+sessionInfo()
+```

@@ -28,7 +28,7 @@ I want to set a base directory that we can use as a working space.
 
 ```{r}
 ##########################################################################################
-baseRepository = 'E:/requests/1200/241019_1200_orbitrapLumos'
+baseRepository = 'E:/requests/bms/241025_bms_orbitrapLumos'
 ```
 
 ## Data processing
@@ -42,21 +42,21 @@ Read in data from DIA-NN and process with the IQ package.
 ##if you are using DIA-NN version 1.9 or greater, you need to rename the Fragment.Quant column
 #
 dia1 = read_tsv(paste(baseRepository, '/diannDia1/report.tsv',sep=''), show_col_types = FALSE) %>%
-  dplyr::mutate(File.Name = sub('.*241019_1200_graciousTissueHomogenate_(.*)_dia[123]\\.mzML', '\\1', File.Name)) %>%
+  dplyr::mutate(File.Name = sub('.*241025_bms_sp3serosilbead-test_sample_(.*)_dia[123]\\.mzML', '\\1', File.Name)) %>%
   dplyr::filter(!grepl(';', Protein.Group)) %>%
   dplyr::mutate(fraction = 1) %>%
   dplyr::rename(Fragment.Quant.Corrected = 'Fragment.Quant.Raw')
 
 #
 dia2 = read_tsv(paste(baseRepository, '/diannDia2/report.tsv',sep=''), show_col_types = FALSE) %>%
-  dplyr::mutate(File.Name = sub('.*241019_1200_graciousTissueHomogenate_(.*)_dia[123]\\.mzML', '\\1', File.Name)) %>%
+  dplyr::mutate(File.Name = sub('.*241025_bms_sp3serosilbead-test_sample_(.*)_dia[123]\\.mzML', '\\1', File.Name)) %>%
   dplyr::filter(!grepl(';', Protein.Group)) %>%
   dplyr::mutate(fraction = 2) %>%
   dplyr::rename(Fragment.Quant.Corrected = 'Fragment.Quant.Raw')
 
 #
 dia3 = read_tsv(paste(baseRepository, '/diannDia3/report.tsv',sep=''), show_col_types = FALSE) %>%
-  dplyr::mutate(File.Name = sub('.*241019_1200_graciousTissueHomogenate_(.*)_dia[123]\\.mzML', '\\1', File.Name)) %>%
+  dplyr::mutate(File.Name = sub('.*241025_bms_sp3serosilbead-test_sample_(.*)_dia[123]\\.mzML', '\\1', File.Name)) %>%
   dplyr::filter(!grepl(';', Protein.Group)) %>%
   dplyr::mutate(fraction = 3) %>%
   dplyr::rename(Fragment.Quant.Corrected = 'Fragment.Quant.Raw')
@@ -80,7 +80,7 @@ iqResult = process_long_format(paste(baseRepository,'/dataProcessing/combinedFil
                            peptide_extractor = function(x) gsub("[0-9].*$", "", x))
 
 ##do the same for the human index
-annotationDb = readRDS(paste(baseRepository, '/databases/2024-10-31-reviewed-UP000000589-spikein.fasta_index_trypticPeps.rds',sep='')) %>%
+annotationDb = readRDS(paste(baseRepository, '/databases/2024-11-06-reviewed-UP000005640-spikein.fasta_index_trypticPeps.rds',sep='')) %>%
   dplyr::select(-species) %>%
   dplyr::filter(!grepl('sp\\|V.*',gene))
 
@@ -96,6 +96,44 @@ saveRDS(proData, paste(baseRepository, '/dataProcessing/parsedProteinData.rds', 
 write.table(proData, paste(baseRepository, '/dataProcessing/parsedProteinData.tsv', sep = ''), 
             col.names = TRUE, row.names = FALSE, quote = FALSE, sep = '\t')
 ```
+
+Summarize the data for each data set.
+
+```{r}
+##########################################################################################
+##collapse into number of peptides, number of proteins
+processedData = readRDS(paste(baseRepository, '/dataProcessing/parsedProteinData.rds', sep = ''))
+
+##conditions to summarize
+sampleConditions = c('sp3magRack','sp3serosilMagRack','sp3spin','sp3serosilSpin')
+
+##
+dataSummary = tibble()
+for (i in 1:length(sampleConditions)){
+  tempData = processedData[,c(which(names(processedData) == 'accession'),
+                              which(names(processedData) == 'gene'),
+                              which(names(processedData) == 'n_fragments'),
+                              which(names(processedData) == 'n_peptides'),
+                              which(names(processedData) == paste(sampleConditions[i],'_R1', sep = '')),
+                              which(names(processedData) == paste(sampleConditions[i],'_R2', sep = '')),
+                              which(names(processedData) == paste(sampleConditions[i],'_R3', sep = '')))]
+  #
+  tempData$numNA = rowSums(is.na(tempData[,5:7]))
+  proHits = dplyr::filter(tempData, numNA < 1)  
+  tempSummaryData = tibble('dataset' = sampleConditions[i],
+                           'proteins' = nrow(proHits),
+                           'fragments' = sum(proHits$n_fragments, na.rm = TRUE),
+                           'peptides' = sum(proHits$n_peptides, na.rm = TRUE),
+                           'signalIntensity' = sum(proHits[,5], na.rm = TRUE))
+  #
+  dataSummary = rbind(dataSummary, tempSummaryData)
+}
+
+#
+dataSummary
+```
+
+These data look quite identical. I wonder if it is because we searched them all as one set. What if we did separate searches?
 
 Perform differential expression analysis on the data.
 

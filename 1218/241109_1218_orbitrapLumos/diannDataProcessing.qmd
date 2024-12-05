@@ -1,0 +1,99 @@
+---
+title: "diannDataProcessing"
+author: "Christopher Hughes"
+format: html
+editor: visual
+---
+
+## Details
+
+This document describes processing of proteomics data from DIANN to compile a final protein set.
+
+## Setting up the environment
+
+These are packages you will need for this notebook. For exact versions used, please refer to the session info at the bottom of this notebook.
+
+```{r}
+#| message: false
+#| warning: false
+##########################################################################################
+library('tidyverse')
+library('iq')
+library('DEqMS')
+library('RColorBrewer')
+library('ggrepel')
+```
+
+I want to set a base directory that we can use as a working space.
+
+```{r}
+##########################################################################################
+baseRepository = 'E:/requests/1218/241109_1218_orbitrapLumos'
+```
+
+## Data processing
+
+Read in data from DIA-NN and process with the IQ package.
+
+```{r}
+##########################################################################################
+##first we can filter and parse the report data into a better format for IQ
+##I had to do some extra stuff here because the sample ID was in a bad format
+##if you are using DIA-NN version 1.9 or greater, you need to rename the Fragment.Quant column
+#
+dia1 = read_tsv(paste(baseRepository, '/diannDia1/report.tsv',sep=''), show_col_types = FALSE) %>%
+  dplyr::mutate(File.Name = sub('.*241109_1210_sp_brainRegions_(.*)_dia[123]\\.mzML', '\\1', File.Name)) %>%
+  dplyr::filter(!grepl(';', Protein.Group)) %>%
+  dplyr::mutate(fraction = 1) %>%
+  dplyr::rename(Fragment.Quant.Corrected = 'Fragment.Quant.Raw')
+
+#
+dia2 = read_tsv(paste(baseRepository, '/diannDia2/report.tsv',sep=''), show_col_types = FALSE) %>%
+  dplyr::mutate(File.Name = sub('.*241109_1210_sp_brainRegions_(.*)_dia[123]\\.mzML', '\\1', File.Name)) %>%
+  dplyr::filter(!grepl(';', Protein.Group)) %>%
+  dplyr::mutate(fraction = 2) %>%
+  dplyr::rename(Fragment.Quant.Corrected = 'Fragment.Quant.Raw')
+
+#
+dia3 = read_tsv(paste(baseRepository, '/diannDia3/report.tsv',sep=''), show_col_types = FALSE) %>%
+  dplyr::mutate(File.Name = sub('.*241109_1210_sp_brainRegions_(.*)_dia[123]\\.mzML', '\\1', File.Name)) %>%
+  dplyr::filter(!grepl(';', Protein.Group)) %>%
+  dplyr::mutate(fraction = 3) %>%
+  dplyr::rename(Fragment.Quant.Corrected = 'Fragment.Quant.Raw')
+
+#
+raw = rbind(dia1,dia2,dia3)
+
+##save the data
+write.table(raw, paste(baseRepository,'/dataProcessing/combinedFilteredReportAnnotated.tsv',sep=''), 
+            col.names = TRUE, row.names = FALSE, quote = FALSE, sep = '\t')
+
+##run the IQ analysis
+iqResult = process_long_format(paste(baseRepository,'/dataProcessing/combinedFilteredReportAnnotated.tsv',sep=''), 
+                           output_filename = paste(baseRepository,'/dataProcessing/combinedFilteredReportAnnotatedIq.tsv',sep=''),
+                           sample_id = "File.Name",
+                           secondary_id = c("Precursor.Id", "fraction"),
+                           primary_id = "Protein.Group",
+                           annotation_col = c("Protein.Names", "Genes"),
+                           normalization = 'median',
+                           filter_double_less = c("Q.Value" = "0.01", "PG.Q.Value" = "0.01", "Lib.Q.Value" = "0.01", "Lib.PG.Q.Value" = "0.01"),
+                           peptide_extractor = function(x) gsub("[0-9].*$", "", x))
+
+##do the same for the human index
+annotationDb = readRDS(paste(baseRepository, '/databases/2024-11-13-reviewed-UP000000589-spikein.fasta_index_trypticPeps.rds',sep='')) %>%
+  dplyr::select(-species) %>%
+  dplyr::filter(!grepl('sp\\|V.*',gene))
+
+##parse the IQ result
+proData = read_tsv(paste(baseRepository,'/dataProcessing/combinedFilteredReportAnnotatedIq.tsv',sep=''), show_col_types = FALSE) %>%
+  dplyr::rename(accession = 'Protein.Group') %>%
+  dplyr::select(-Genes) %>%
+  dplyr::left_join(annotationDb)
+
+
+##save the data
+saveRDS(proData, paste(baseRepository, '/dataProcessing/parsedProteinData.rds', sep = ''))
+write.table(proData, paste(baseRepository, '/dataProcessing/parsedProteinData.tsv', sep = ''), 
+            col.names = TRUE, row.names = FALSE, quote = FALSE, sep = '\t')
+```
+
