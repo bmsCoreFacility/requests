@@ -27,7 +27,7 @@ I want to set a base directory that we can use for our analysis.
 
 ```{r}
 ##########################################################################################
-baseRepository = 'E:/requests/1172/241204_1172_orbitrapLumos'
+baseRepository = 'E:/requests/1222/241217_1222_orbitrapLumos'
 ```
 
 ## Data processing
@@ -101,7 +101,7 @@ Process the fasta database.
 ```{r}
 ##########################################################################################
 ##read in the fasta file
-fastaFileName = '2024-12-05-reviewed-UP000005640-spikein.fasta'
+fastaFileName = '2024-12-17-UP000000803-spikein.fasta'
 fastaDb = readAAStringSet(paste(baseRepository,'/databases/', fastaFileName, sep=''))
 
 

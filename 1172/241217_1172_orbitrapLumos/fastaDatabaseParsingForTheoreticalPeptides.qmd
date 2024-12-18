@@ -27,7 +27,7 @@ I want to set a base directory that we can use for our analysis.
 
 ```{r}
 ##########################################################################################
-baseRepository = 'E:/requests/1172/241204_1172_orbitrapLumos'
+baseRepository = 'E:/requests/1172/241217_1172_orbitrapLumos'
 ```
 
 ## Data processing
@@ -41,9 +41,7 @@ fastaDb = readAAStringSet(paste(baseRepository,'/databases/crap_2024_01_15.fasta
 
 ##define an index for each entry
 fastaIndex = tibble('metadata' = names(fastaDb)) %>%
-  dplyr::mutate(accession = paste('sp|CONT', seq(1,nrow(.),1), '|', 
-                                  sub('sp\\|(.*)\\|','\\1', metadata), ' GN=', 
-                                  sub('sp\\|(.*)_.*','\\1', metadata), ' PE=3', sep=''))
+  dplyr::mutate(accession = paste('sp|CONT', seq(1,nrow(.),1), '|', sub('sp\\|(.*)\\|','\\1', metadata), ' GN=', sub('sp\\|(.*)_.*','\\1', metadata), sep=''))
 fastaDbEdited = fastaDb
 names(fastaDbEdited) = fastaIndex$accession
 toKeep = data.frame(name = names(fastaDbEdited)[which(!grepl('HUMAN', names(fastaDbEdited)))])
@@ -94,6 +92,63 @@ saveRDS(fastaIndexMatch, paste(baseRepository, '/databases/crap_2024_01_15_noHum
 writeXStringSet(fastaSubset, paste(baseRepository, '/databases/crap_2024_01_15_noHuman.fasta',sep=''))
 ```
 
+For the viral database of AUG starts provided to me by Eric Pringle.
+
+```{r}
+##########################################################################################
+##viral database processing
+fastaDb = readAAStringSet(paste(baseRepository,'/databases/KSHV_AUG_with_kaposins_86Sequences.fasta',sep=''))
+
+##define an index for each entry
+fastaIndex = tibble('metadata' = names(fastaDb)) %>%
+  mutate(accession = paste('sp|V', seq(10001,10000+nrow(.),1), '|VIRUS', seq(1,nrow(.),1), '_HUMAN ', 'GN=VIRUS', seq(1,nrow(.),1), sep=''))
+
+##add this index to the original database and rewrite it
+names(fastaDb) = fastaIndex$accession
+writeXStringSet(fastaDb, paste(baseRepository,'/databases/KSHV_AUG_with_kaposins_86Sequences_reannotated.fasta', sep=''))
+
+
+##make an index that matches the human one
+fastaIndexMatch = fastaIndex %>%
+  dplyr::rename(parsed = 'accession') %>%
+  dplyr::mutate(accession = sub('sp\\|(.*)\\|.*','\\1',parsed),
+                gene = sub('.*GN\\=(.*)','\\1',parsed),
+                length = width(fastaDb)) %>%
+  dplyr::mutate(species = 'virus') %>%
+  dplyr::select(accession, gene, length, species)
+
+
+
+##loop through the database entries and calculate tryptic peptide numbers
+trypticPeptides = vector()
+detectableLength = vector()
+for (i in 1:length(fastaDb)){
+  #get the protein sequence
+  aaSeq = as.character(fastaDb[[i]])
+  #digest the protein sequence...sometimes there are weird amino acids, so we assign them random masses
+  seqDigest = OrgMassSpecR::Digest(aaSeq, enzyme = 'trypsin', missed = 0, custom = list(code = c('X','U','Z','B'), mass = c(50, 60, 70, 80)))
+  #calculate the total length of the protein
+  seqDigest$pepLength = (seqDigest$stop - seqDigest$start) + 1
+  #subset the set of digested peptides based on what we normally detect in an MS experiment
+  seqDigestSub = subset(seqDigest, (seqDigest$pepLength > 5) & (seqDigest$pepLength < 31))
+  #add to the tryptic peptides vector
+  trypticPeptides = c(trypticPeptides, nrow(seqDigestSub))
+  #add to the detectable length vector
+  detectableLength = c(detectableLength, sum(seqDigestSub$pepLength, na.rm = TRUE))
+  #output a message
+  message(paste('Finished ', i, ' proteins.', sep = ''))
+}
+
+
+##add the output to our previously generated index
+fastaIndexMatch$detectablePeptides = trypticPeptides
+fastaIndexMatch$detectableLength = detectableLength
+fastaIndexMatch$pringleId = fastaIndex$metadata
+
+##save the file
+saveRDS(fastaIndexMatch, paste(baseRepository, '/databases/KSHV_AUG_with_kaposins_86Sequences_index_trypticPeps.rds',sep=''))
+```
+
 Go to FragPipe and download the human database appended with this new contaminant one. Uncheck the boxes for decoys and contaminants. Add the contaminant database generated above as a spike-in. After that, we will process the downloaded file using the code below.
 
 Process the fasta database.
@@ -101,7 +156,7 @@ Process the fasta database.
 ```{r}
 ##########################################################################################
 ##read in the fasta file
-fastaFileName = '2024-12-05-reviewed-UP000005640-spikein.fasta'
+fastaFileName = '2024-12-18-reviewed-UP000005640-spikein.fasta'
 fastaDb = readAAStringSet(paste(baseRepository,'/databases/', fastaFileName, sep=''))
 
 
@@ -110,7 +165,7 @@ fastaIndex = tibble('metadata' = names(fastaDb)) %>%
   dplyr::mutate(length = width(fastaDb)) %>%
   #dplyr::filter(!grepl('contam_sp', metadata) & !grepl('rev_sp', metadata)) %>%
   dplyr::mutate(accession = sub(".*[sptr]\\|(.*)\\|.*$", "\\1", metadata)) %>%
-  dplyr::mutate(gene = ifelse(grepl('GN=', metadata), sub(".*GN=(.*) [PE].*", "\\1", metadata), NA)) %>%
+  dplyr::mutate(gene = ifelse(grepl('GN=', metadata), sub(".*GN=(.*) [PE].*$", "\\1", metadata), NA)) %>%
   dplyr::mutate(species = ifelse(grepl('sapiens', metadata), 'human', 
                              ifelse(grepl('\\=9606', metadata), 'human',
                                     ifelse(grepl('musculus', metadata), 'mouse', 'other')))) %>%
@@ -128,7 +183,7 @@ for (i in 1:length(fastaDb)){
   #get the protein sequence
   aaSeq = as.character(fastaDb[[i]])
   #digest the protein sequence...sometimes there are weird amino acids, so we assign them random masses
-  seqDigest = OrgMassSpecR::Digest(aaSeq, enzyme = 'trypsin', missed = 0, custom = list(code = c('X','U','Z','B'), mass = c(50, 60, 70, 80)))
+  seqDigest = OrgMassSpecR::Digest(aaSeq, enzyme = 'trypsin.strict', missed = 0, custom = list(code = c('X','U','Z','B'), mass = c(50, 60, 70, 80)))
   #calculate the total length of the protein
   seqDigest$pepLength = (seqDigest$stop - seqDigest$start) + 1
   #subset the set of digested peptides based on what we normally detect in an MS experiment
