@@ -82,8 +82,10 @@ stdData = readRDS(paste(baseRepository,'/dataProcessing/dataset_processedStandar
 ##setA
 dat = dplyr::filter(stdData, grepl('setA',sampleSet))
 ggplot(dat, aes(sampleConcentration, experimentalSample)) +
-  stat_poly_line(formula = y ~ poly(x,2)) +
-  stat_poly_eq(formula = y ~ poly(x,2), use_label(c("eq", "R2")),rr.digits = 6) +
+  stat_poly_line(formula = y ~ x) +
+  stat_poly_eq(formula = y ~ x, use_label(c("eq", "R2")),rr.digits = 6) +
+  #stat_poly_line(formula = y ~ poly(x,2)) +
+  #stat_poly_eq(formula = y ~ poly(x,2), use_label(c("eq", "R2")),rr.digits = 6) +
   geom_point(shape = 21, stroke = 1, size = 2) + 
   #stat_smooth(method = "loess", formula = y~x, linewidth = 1) +
   #stat_smooth(method = "lm", formula = y ~ x + I(x^2), size = 1) +
@@ -96,8 +98,10 @@ ggsave(paste(baseRepository,'/dataProcessing/point_standardCurve_setA.png',sep='
 ##setB
 dat = dplyr::filter(stdData, grepl('setB',sampleSet))
 ggplot(dat, aes(sampleConcentration, experimentalSample)) +
-  stat_poly_line(formula = y ~ poly(x,2)) +
-  stat_poly_eq(formula = y ~ poly(x,2), use_label(c("eq", "R2")),rr.digits = 6) +
+  stat_poly_line(formula = y ~ x) +
+  stat_poly_eq(formula = y ~ x, use_label(c("eq", "R2")),rr.digits = 6) +
+  #stat_poly_line(formula = y ~ poly(x,2)) +
+  #stat_poly_eq(formula = y ~ poly(x,2), use_label(c("eq", "R2")),rr.digits = 6) +
   geom_point(shape = 21, stroke = 1, size = 2) + 
   labs(x = 'Standard Concentration (ug/mL)', y = 'Area', title = 'Set B Linearity') +
   theme_classic()
@@ -108,8 +112,10 @@ ggsave(paste(baseRepository,'/dataProcessing/point_standardCurve_setB.png',sep='
 ##setB
 dat = dplyr::filter(stdData, grepl('setB',sampleSet) & sampleNumber != 4) #sample number 4 was messed up so I excluded it for now
 ggplot(dat, aes(sampleConcentration, experimentalSample)) +
-  stat_poly_line(formula = y ~ poly(x,2)) +
-  stat_poly_eq(formula = y ~ poly(x,2), use_label(c("eq", "R2")),rr.digits = 6) +
+  stat_poly_line(formula = y ~ x) +
+  stat_poly_eq(formula = y ~ x, use_label(c("eq", "R2")),rr.digits = 6) +
+  #stat_poly_line(formula = y ~ poly(x,2)) +
+  #stat_poly_eq(formula = y ~ poly(x,2), use_label(c("eq", "R2")),rr.digits = 6) +
   geom_point(shape = 21, stroke = 1, size = 2) + 
   labs(x = 'Standard Concentration (ug/mL)', y = 'Area', title = 'Set B Linearity') +
   theme_classic()
@@ -119,8 +125,10 @@ ggsave(paste(baseRepository,'/dataProcessing/point_standardCurve_setB_sample4Exc
 ##setC
 dat = dplyr::filter(stdData, grepl('setC',sampleSet))
 ggplot(dat, aes(sampleConcentration, experimentalSample)) +
-  stat_poly_line(formula = y ~ poly(x,2)) +
-  stat_poly_eq(formula = y ~ poly(x,2), use_label(c("eq", "R2")),rr.digits = 6) +
+  stat_poly_line(formula = y ~ x) +
+  stat_poly_eq(formula = y ~ x, use_label(c("eq", "R2")),rr.digits = 6) +
+  #stat_poly_line(formula = y ~ poly(x,2)) +
+  #stat_poly_eq(formula = y ~ poly(x,2), use_label(c("eq", "R2")),rr.digits = 6) +
   geom_point(shape = 21, stroke = 1, linewidth = 2) + 
   labs(x = 'Standard Concentration (ug/mL)', y = 'Area', title = 'Set C Linearity') +
   theme_classic()
@@ -150,74 +158,21 @@ write.table(meData, paste(baseRepository,'/dataProcessing/dataset_efficiencyData
             sep = '\t', quote = FALSE, row.names = FALSE)
 ```
 
-Use these equations to determine the concentration of the unknowns.
-
-```{r}
-##########################################################################################
-##get the unknown data
-dilutionFactor = 200
-xValue = 0.0131 #taken from setB standard curve
-yValue = -0.0391 #taken from setB standard curve
-
-unkData = read_csv(paste(baseRepository,'/skyline/moleculeTransitionResults.csv',sep=''),show_col_types = FALSE) %>%
-  dplyr::filter(`Product Mz` == 111.01 | `Product Mz` == 113.02) %>%
-  dplyr::filter(grepl('Unknown',`Replicate Name`)) %>%
-  dplyr::select(`Replicate Name`, `Product Mz`, Area, Background) %>%
-  dplyr::rename(sampleName = `Replicate Name`,
-                fragmentMass = `Product Mz`,
-                signal = 'Area',
-                noise = 'Background') %>%
-  dplyr::mutate(sampleType = ifelse(fragmentMass == 111.01, 'sample', 
-                                    ifelse(grepl('blank',sampleName),'blank','ilis'))) %>%
-  dplyr::mutate(sampleReplicate = sub('.*_rep(.*)','\\1',sampleName)) %>%
-  dplyr::mutate(sampleNumber = sub('.*Unknown(.*)_prm.*','\\1',sampleName)) %>%
-  dplyr::mutate(sampleSet = paste('unknown',sampleNumber,sep='')) %>%
-  tidyr::pivot_wider(id_cols = c('sampleName','sampleSet','sampleNumber','sampleReplicate'), names_from = 'sampleType', values_from = 'signal') %>%
-  dplyr::mutate(relativeToIlis = sample/ilis) %>%
-  dplyr::mutate(concentration = (((relativeToIlis - yValue)/xValue)*dilutionFactor)/1000) #this result is in uM, so need to adjust by 1000 to mM
-
-#
-unkSummary = unkData %>%
-  dplyr::group_by(sampleSet) %>%
-  dplyr::summarise(concentrationMean = mean(concentration), concentrationSD = sd(concentration))
-
-#
-write.table(unkData, paste(baseRepository,'/dataProcessing/dataset_unknownRawData.tsv',sep=''),
-            sep = '\t', quote = FALSE, row.names = FALSE)
-write.table(unkSummary, paste(baseRepository,'/dataProcessing/dataset_unknownDataSummary.tsv',sep=''),
-            sep = '\t', quote = FALSE, row.names = FALSE)
-#
-unkData
-unkSummary
-```
-
-
 Calculate the original concentrations for the standards based on the standard curve data.
 
 ```{r}
 ##########################################################################################
 ##get the standard data
 #equation from corrected B curve y = 1.02e7 + 2.63e7x - 5.83e6x2
-yValue = -0.0391 #taken from setB standard curve
+xValue = 7.72e5
+bValue =  2.96e6 #taken from setB standard curve
 standards = rep(c(0.78125,1.5625,3.125,6.25,12.5,25),each = 3) #in ug/mL
 
 stdData = readRDS(paste(baseRepository,'/dataProcessing/dataset_processedStandardData.rds',sep='')) %>%
   dplyr::select(sampleNumber, sampleSet, sampleReplicate, experimentalSample) %>%
   dplyr::mutate(sampleConcentration = rep(standards,3)) %>%
   dplyr::filter(sampleSet == 'setB') %>%
-  dplyr::mutate(cValue = 1.02e7 - experimentalSample,
-                aValue = -5.83e6,
-                bSquared = (2.63e7)^2,
-                twoA = 2*(-5.83e6)) %>%
-  dplyr::mutate(b24ac = bSquared - (4*aValue*cValue)) %>%
-  dplyr::mutate(sqB24ac = sqrt(b24ac)) %>%
-  dplyr::mutate(solution1 = (-2.63e7 + sqB24ac)/twoA,
-                solution2 = (-2.63e7 - sqB24ac)/twoA) %>%
-  dplyr::mutate(check1 = 1.02e7 + (2.63e7 * solution1) - (5.83e6 * (solution1)^2))
-  
-
-
-dplyr::mutate(calcConcentration = (relativeToIlis - yValue)/xValue) %>%
+  dplyr::mutate(calcConcentration = (experimentalSample - bValue)/xValue) %>%
   dplyr::mutate(acc = (calcConcentration/sampleConcentration)*100) %>%
   dplyr::group_by(sampleNumber, sampleSet, sampleConcentration) %>%
   dplyr::summarise(mean_acc = mean(acc, na.rm = TRUE), sd_acc = sd(acc, na.rm = TRUE)) %>%
@@ -228,95 +183,151 @@ write.table(stdData, paste(baseRepository,'/dataProcessing/dataset_accuracyData.
             sep = '\t', quote = FALSE, row.names = FALSE)
 ```
 
-Plot the QC samples to look at performance as the run batch was moving along.
+Plot the SSC samples to look at performance as the run batch was moving along.
 
 ```{r}
 ##########################################################################################
 ##read in the processed data
 sscData = read_csv(paste(baseRepository,'/skyline/moleculeTransitionResults.csv',sep=''),show_col_types = FALSE) %>% 
-  dplyr::filter(`Product Mz` == 111.01 | `Product Mz` == 113.02) %>%
-  dplyr::filter(grepl('SSC_new',`Replicate Name`)) %>%
+  dplyr::filter(`Product Mz` == 121.1 | `Product Mz` == 60.1) %>%
+  dplyr::filter(grepl('ssc',`Replicate Name`)) %>%
   dplyr::select(`Replicate Name`, `Product Mz`, Area, Background) %>%
   dplyr::rename(sampleName = `Replicate Name`,
                 fragmentMass = `Product Mz`,
                 signal = 'Area',
                 noise = 'Background') %>%
-  dplyr::mutate(sampleType = ifelse(fragmentMass == 111.01, 'sample', 
+  dplyr::mutate(sampleType = ifelse(fragmentMass == 121.1, 'sample', 
                                     ifelse(grepl('blank',sampleName),'blank','ilis'))) %>%
   dplyr::mutate(sampleReplicate = sub('.*_rep(.*)','\\1',sampleName)) %>%
   dplyr::mutate(sampleSet = paste('ssc',sampleReplicate,sep='')) %>%
   tidyr::pivot_wider(id_cols = c('sampleName','sampleSet','sampleReplicate'), names_from = 'sampleType', values_from = 'signal') %>%
-  dplyr::mutate(relativeToIlis = sample/ilis)
+  dplyr::filter(sample > 100000)
 
 #
 write.table(sscData, paste(baseRepository,'/dataProcessing/dataset_systemSuitabilityStandardData.tsv',sep=''),
             sep = '\t', quote = FALSE, row.names = FALSE)
 
 ##plot
-dat = sscData %>%
-  dplyr::mutate(sampleSet = factor(sampleSet, levels = c(paste('ssc',seq(1,15,1),sep=''))))
-ggplot(dat, aes(sampleSet, relativeToIlis)) +
+dat = sscData
+ggplot(dat, aes(sampleSet, log10(sample))) +
   geom_point(shape = 21, stroke = 1, size = 2) + 
-  labs(x = 'SSC Run Number', y = 'Area Relative to Internal Standard', title = 'System Suitability Standard Performance') +
-  scale_y_continuous(limits = c(0,1), breaks = seq(0,1,0.1)) +
-  theme_classic()
+  labs(x = 'SSC Run Number', y = 'Methoctramine Area', title = 'System Suitability Standard Performance') +
+  scale_y_continuous(limits = c(0,10), breaks = seq(0,10,2)) +
+  theme_classic() +
+  theme(axis.text.x = element_blank())
 ggsave(paste(baseRepository,'/dataProcessing/point_sscTimecourse.png',sep=''),
        width = 6, height = 6)
 ```
+
+Some of the SSC samples are messed up. Not sure if it is a machine issue, or if it is the method itself. There doesn't seem to be any consistency to it. 
 
 Prepare the QC data to look at signal drop off across days. 
 
 ```{r}
 ##########################################################################################
 ##read in the processed data
-standards = rep(c(0,500,31.25,125),each = 9) #in uM
-xValue = 0.0131 #taken from setB standard curve
-yValue = -0.0391 #taken from setB standard curve
+standards = rep(c(0,1.5625,6.25,25),each = 3) #in ug/mL
 
 ##
 qcData = read_csv(paste(baseRepository,'/skyline/moleculeTransitionResults.csv',sep=''),show_col_types = FALSE) %>% 
-  dplyr::filter(`Product Mz` == 111.01 | `Product Mz` == 113.02) %>%
-  dplyr::filter(grepl('Qc',`Replicate Name`)) %>%
+  dplyr::filter(`Product Mz` == 121.1 | `Product Mz` == 60.1) %>%
+  dplyr::filter(grepl('qc',`Replicate Name`)) %>%
   dplyr::select(`Replicate Name`, `Product Mz`, Area, Background) %>%
   dplyr::rename(sampleName = `Replicate Name`,
                 fragmentMass = `Product Mz`,
                 signal = 'Area',
                 noise = 'Background') %>%
-  dplyr::mutate(preparedConcentration = rep(standards,2)) %>%
-  dplyr::mutate(sampleType = ifelse(fragmentMass == 111.01, 'sample', 
+  dplyr::mutate(preparedConcentration = rep(standards,6)) %>%
+  dplyr::mutate(sampleType = ifelse(fragmentMass == 121.1, 'sample', 
                                     ifelse(grepl('blank',sampleName),'blank','ilis')),
-                sampleSet = ifelse(grepl('Empty',sampleName),'empty',
-                                   ifelse(grepl('High',sampleName),'high',
-                                          ifelse(grepl('Low',sampleName),'low','medium')))) %>%
+                sampleSet = ifelse(grepl('E',sampleName),'empty',
+                                   ifelse(grepl('H',sampleName),'high',
+                                          ifelse(grepl('L',sampleName),'low','medium')))) %>%
   dplyr::mutate(sampleReplicate = sub('.*_rep(.*)','\\1',sampleName)) %>%
-  dplyr::mutate(sampleNumber = sub('sampleQc(.*)_prm.*','\\1',sampleName)) %>%
-  tidyr::pivot_wider(id_cols = c('sampleName','sampleSet','sampleNumber','sampleReplicate','preparedConcentration'), names_from = 'sampleType', values_from = 'signal') %>%
-  dplyr::mutate(relativeToIlis = sample/ilis) %>%
-  dplyr::mutate(calculatedConcentration = (relativeToIlis - yValue)/xValue) %>% #this result is in uM
-  dplyr::mutate(accuracy = (calculatedConcentration/preparedConcentration)*100)
+  dplyr::mutate(sampleNumber = sub('sample_qc_(.*)_rep.*','\\1',sampleName)) %>%
+  tidyr::pivot_wider(id_cols = c('sampleName','sampleSet','sampleNumber','sampleReplicate','preparedConcentration'), names_from = 'sampleType', values_from = 'signal')
   
-
 #
 write.table(qcData, paste(baseRepository,'/dataProcessing/dataset_qcRawData.tsv',sep=''),
             sep = '\t', quote = FALSE, row.names = FALSE)
 
-#compare with the expected concentrations
-qcDataSummary = qcData %>%
-  dplyr::group_by(sampleNumber, sampleSet, preparedConcentration) %>%
-  dplyr::summarise(mean_accuracy = mean(accuracy, na.rm = TRUE), sd_accuracy = sd(accuracy, na.rm = TRUE)) %>%
-  dplyr::mutate(cv = (sd_accuracy/mean_accuracy)*100)
+#calculate intraday variability
+intraDay = qcData %>%
+  dplyr::select(sampleNumber, sample) %>%
+  dplyr::group_by(sampleNumber) %>%
+  dplyr::summarise(mean_signal = mean(sample, na.rm = TRUE), sd_signal = sd(sample, na.rm = TRUE)) %>%
+  dplyr::mutate(cv = (sd_signal/mean_signal)*100)
 
 #
-write.table(qcDataSummary, paste(baseRepository,'/dataProcessing/dataset_qcDataSummary.tsv',sep=''),
+write.table(intraDay, paste(baseRepository,'/dataProcessing/dataset_qcIntraday.tsv',sep=''),
+            sep = '\t', quote = FALSE, row.names = FALSE) 
+
+#calculate interday variability
+interDay = intraDay %>%
+  dplyr::mutate(sampleName = sub('(.*)[0-9]','\\1',sampleNumber)) %>%
+  dplyr::select(sampleName, mean_signal) %>%
+  dplyr::rename(signal = 'mean_signal') %>%
+  dplyr::group_by(sampleName) %>%
+  dplyr::summarise(mean_signal = mean(signal, na.rm = TRUE), sd_signal = sd(signal, na.rm = TRUE)) %>%
+  dplyr::mutate(cv = (sd_signal/mean_signal)*100) 
+  
+#
+write.table(interDay, paste(baseRepository,'/dataProcessing/dataset_qcInterday.tsv',sep=''),
             sep = '\t', quote = FALSE, row.names = FALSE)
 ```
 
+Calculate the CV of the CSF measurements. 
 
+```{r}
+##########################################################################################
+##read in the processed data
+standards = rep(c(0,6.25),each = 3) #in ug/mL
 
+##
+csfData = read_csv(paste(baseRepository,'/skyline/moleculeTransitionResults.csv',sep=''),show_col_types = FALSE) %>% 
+  dplyr::filter(`Product Mz` == 121.1 | `Product Mz` == 60.1) %>%
+  dplyr::filter(grepl('csf',`Replicate Name`)) %>%
+  dplyr::select(`Replicate Name`, `Product Mz`, Area, Background) %>%
+  dplyr::rename(sampleName = `Replicate Name`,
+                fragmentMass = `Product Mz`,
+                signal = 'Area',
+                noise = 'Background') %>%
+  #dplyr::mutate(preparedConcentration = rep(standards,6)) %>%
+  dplyr::mutate(sampleType = ifelse(fragmentMass == 121.1, 'sample', 
+                                    ifelse(grepl('blank',sampleName),'blank','ilis')),
+                sampleSet = ifelse(grepl('E',sampleName),'empty','spike')) %>%
+  dplyr::mutate(sampleReplicate = sub('.*_rep(.*)','\\1',sampleName)) %>%
+  dplyr::mutate(sampleNumber = sub('sample_csf_(.*)_rep.*','\\1',sampleName)) %>%
+  tidyr::pivot_wider(id_cols = c('sampleName','sampleSet','sampleNumber','sampleReplicate'), names_from = 'sampleType', values_from = 'signal') %>%
+  dplyr::mutate(analysisDay = ifelse(sampleReplicate < 4, 'D1', 
+                                     ifelse(sampleReplicate > 3 & sampleReplicate < 7, 'D2', 'D3')))
+  
+#
+write.table(csfData, paste(baseRepository,'/dataProcessing/dataset_csfRawData.tsv',sep=''),
+            sep = '\t', quote = FALSE, row.names = FALSE)
 
+#calculate intraday variability
+intraDay = csfData %>%
+  dplyr::select(sampleNumber, analysisDay, sample) %>%
+  dplyr::group_by(sampleNumber, analysisDay) %>%
+  dplyr::summarise(mean_signal = mean(sample, na.rm = TRUE), sd_signal = sd(sample, na.rm = TRUE)) %>%
+  dplyr::mutate(cv = (sd_signal/mean_signal)*100)
 
+#
+write.table(intraDay, paste(baseRepository,'/dataProcessing/dataset_csfIntraday.tsv',sep=''),
+            sep = '\t', quote = FALSE, row.names = FALSE) 
 
-
+#calculate interday variability
+interDay = intraDay %>%
+  dplyr::rename(signal = 'mean_signal') %>%
+  dplyr::group_by(sampleNumber) %>%
+  dplyr::summarise(mean_signal = mean(signal, na.rm = TRUE), sd_signal = sd(signal, na.rm = TRUE)) %>%
+  dplyr::mutate(cv = (sd_signal/mean_signal)*100) 
+  
+#
+write.table(interDay, paste(baseRepository,'/dataProcessing/dataset_csfInterday.tsv',sep=''),
+            sep = '\t', quote = FALSE, row.names = FALSE)
+```
 
 
 
