@@ -1,0 +1,55 @@
+---
+title: "fairn lab data processing"
+author: "Christopher Hughes"
+format: html
+---
+
+## Details
+
+This document describes processing Fragpipe data for comparison purposes.
+
+## Setting up the environment
+
+These are packages you will need for this notebook. For exact versions used, please refer to the session info at the bottom of this notebook.
+
+```{r}
+#| message: false
+#| warning: false
+##########################################################################################
+library('tidyverse')
+```
+
+I want to set a base directory that we can use for our analysis.
+
+```{r}
+##########################################################################################
+baseRepository = 'E:/requests/1178/250215_1178_orbitrapLumos'
+```
+
+## Data processing
+
+Process the fragpipe data.
+
+```{r}
+##########################################################################################
+##process the sample data
+annoData = read_tsv(paste(baseRepository,'/bmsSampleMatrix.txt',sep=''),show_col_types = FALSE)
+compiledProteinData = tibble()
+for (i in seq(1,8,1)){
+  proTemp = read_tsv(paste(baseRepository,'/fragpipeFirstPass/sample',i,'/proteinProcessed.tsv',sep=''),show_col_types = FALSE) %>%
+    dplyr::select(accession, gene, uniqueSpectralCount, iBAQ) %>%
+    dplyr::filter(uniqueSpectralCount >= 1) %>%
+    dplyr::mutate(dataset = annoData$sampleName[i])
+  #
+  compiledProteinData = rbind(compiledProteinData, proTemp)
+}
+
+#transform the data into wide format
+proteinWide = compiledProteinData %>%
+  tidyr::pivot_wider(id_cols = c('accession','gene'), names_from = 'dataset', values_from = c('uniqueSpectralCount','iBAQ'))
+                
+#save the data
+write.table(proteinWide, paste(baseRepository,'/compiledProteinData.tsv',sep=''),
+            row.names = FALSE, quote = FALSE, sep = '\t')
+                
+```
