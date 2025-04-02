@@ -1,0 +1,173 @@
+---
+title: "diannDataProcessing"
+author: "Christopher Hughes"
+format: html
+editor: visual
+---
+
+## Details
+
+This document describes processing of proteomics data from different loading quantities.
+
+## Setting up the environment
+
+These are packages you will need for this notebook. For exact versions used, please refer to the session info at the bottom of this notebook.
+
+```{r}
+#| message: false
+#| warning: false
+##########################################################################################
+library('tidyverse')
+library('RColorBrewer')
+library('ggrepel')
+```
+
+I want to set a base directory that we can use as a working space.
+
+```{r}
+##########################################################################################
+baseRepository = 'E:/requests/1214/250225_1214_orbitrapLumos'
+```
+
+## Data processing
+
+Read in the processed data for each loading quantity. 
+
+```{r}
+##########################################################################################
+##read in data
+foldersToProcess = c('q500ng','q1000ng','q1500ng','q2000ng')
+
+##
+proData = tibble()
+for (i in 1:length(foldersToProcess)){
+  #
+  proTemp = read_tsv(paste(baseRepository,'/',foldersToProcess[i],'/dataProcessing/parsedProteinData.tsv',sep=''),
+                    show_col_types = FALSE) %>%
+    dplyr::rename_with(~sub('.*_','',.), contains('ng')) %>%
+    dplyr::mutate(dataset = foldersToProcess[i]) %>%
+    dplyr::rowwise() %>%
+    dplyr::mutate(numNAs = sum(is.na(c_across(rep1:rep3)))) %>%
+    dplyr::filter(numNAs < 1) %>%
+    dplyr::mutate(meanSignal = mean(c_across(rep1:rep3)), 
+                  sdSignal = sd(c_across(rep1:rep3))) %>%
+    dplyr::mutate(cvSignal = (sdSignal / meanSignal)*100)
+  
+  #
+  proData = rbind(proData, proTemp)
+}
+
+```
+
+Using the stats data calculated from DIA-NN.
+
+```{r}
+##########################################################################################
+##we can also use the stats matrix for this
+statsData = tibble()
+for (i in 1:length(foldersToProcess)){
+  #
+  statsTemp = read_tsv(paste(baseRepository,'/',foldersToProcess[i],'/diannDia2/report.stats.tsv',sep=''),
+                    show_col_types = FALSE) %>%
+    dplyr::mutate(dataset = foldersToProcess[i])
+  
+  #
+  statsData = rbind(statsData, statsTemp)
+}
+
+#
+statsData$dataset = factor(statsData$dataset, levels = c('q500ng','q1000ng','q1500ng','q2000ng'))
+
+##plot protein data
+ggplot(statsData, aes(dataset, Proteins.Identified)) +
+  geom_jitter(size = 2, width = 0.1) +
+  labs(x = 'ng on-column', y = 'Number of Proteins', title = 'Protein Identifications') +
+  scale_y_continuous(limits = c(0,9000), breaks = seq(0,10000,1500)) +
+  geom_hline(yintercept = mean(statsData[statsData$dataset == 'q1500ng',]$Proteins.Identified), linetype = 'dashed') +
+  theme_classic() +
+  theme(axis.text.y = element_blank(),
+        axis.ticks.y = element_blank())
+ggsave(paste(baseRepository, '/dataOutput/scatter_proteinIdentifications.pdf', sep = ''),
+         height = 2, width = 2, useDingbats = FALSE)
+#
+statsDataSummary = dplyr::select(statsData, Proteins.Identified, dataset) %>%
+  dplyr::summarise(medianData = median(Proteins.Identified), .by = 'dataset')
+statsDataSummary
+
+##plot precursor data
+ggplot(statsData, aes(dataset, Precursors.Identified)) +
+  geom_jitter(size = 2, width = 0.1) +
+  labs(x = 'ng on-column', y = 'Number of Precursors', title = 'Precursor Identifications') +
+  scale_y_continuous(limits = c(0,45000), breaks = seq(0,60000,5000)) +
+  geom_hline(yintercept = mean(statsData[statsData$dataset == 'q1500ng',]$Precursors.Identified), linetype = 'dashed') +
+  theme_classic() +
+  theme(axis.text.y = element_blank(),
+        axis.ticks.y = element_blank())
+ggsave(paste(baseRepository, '/dataOutput/scatter_precursorIdentifications.pdf', sep = ''),
+         height = 2, width = 2, useDingbats = FALSE)
+#
+statsDataSummary = dplyr::select(statsData, Precursors.Identified, dataset) %>%
+  dplyr::summarise(medianData = median(Precursors.Identified), .by = 'dataset')
+statsDataSummary
+
+##plot MS2 intensity data
+ggplot(statsData, aes(dataset, MS2.Signal)) +
+  geom_jitter(size = 2, width = 0.1) +
+  labs(x = 'ng on-column', y = 'MS2 Signal', title = 'MS/MS Signal') +
+  scale_y_continuous(limits = c(0,1.5e12), breaks = seq(0,2e12,4e11)) +
+  geom_hline(yintercept = mean(statsData[statsData$dataset == 'q1500ng',]$MS2.Signal), linetype = 'dashed') +
+  theme_classic() +
+  theme(axis.text.y = element_blank(),
+        axis.ticks.y = element_blank())
+ggsave(paste(baseRepository, '/dataOutput/scatter_ms2Signal.pdf', sep = ''),
+         height = 2, width = 2, useDingbats = FALSE)
+#
+statsDataSummary = dplyr::select(statsData, MS2.Signal, dataset) %>%
+  dplyr::summarise(medianData = median(MS2.Signal), .by = 'dataset')
+statsDataSummary
+
+#plot the CV data
+proData$dataset = factor(proData$dataset, levels = c('q500ng','q1000ng','q1500ng','q2000ng'))
+ggplot(proData, aes(dataset, cvSignal)) +
+  geom_boxplot(width = 0.5) +
+  labs(x = 'ng on-column', y = 'Coefficient of variation (%)', title = 'Protein CV after normalization') +
+  scale_y_continuous(limits = c(0,100), breaks = seq(0,100,20)) +
+  theme_classic() +
+  theme(axis.text.y = element_blank(),
+        axis.ticks.y = element_blank())
+ggsave(paste(baseRepository, '/dataOutput/boxplot_proteinCv.pdf', sep = ''),
+         height = 2, width = 2, useDingbats = FALSE)
+statsDataSummary = dplyr::select(proData, cvSignal, dataset) %>%
+  dplyr::group_by(dataset) %>%
+  dplyr::summarise(medianData = median(cvSignal))
+statsDataSummary
+
+
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

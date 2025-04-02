@@ -1,0 +1,226 @@
+---
+title: "diannDataProcessing"
+author: "Christopher Hughes"
+format: html
+editor: visual
+---
+
+## Details
+
+This document describes processing of proteomics data from different loading quantities.
+
+## Setting up the environment
+
+These are packages you will need for this notebook. For exact versions used, please refer to the session info at the bottom of this notebook.
+
+```{r}
+#| message: false
+#| warning: false
+##########################################################################################
+library('tidyverse')
+library('RColorBrewer')
+library('ggrepel')
+```
+
+I want to set a base directory that we can use as a working space.
+
+```{r}
+##########################################################################################
+baseRepository = 'E:/requests/1214'
+```
+
+## Data processing
+
+Read in the processed data for each loading quantity. 
+
+```{r}
+##########################################################################################
+##read in data
+foldersToProcess = c('250324_1214_orbitrapLumos','250325_1214_orbitrapLumos','250326_1214_orbitrapLumos','250327_1214_orbitrapLumos')
+folderNames = c('A1','B1','C1','A2')
+sampleNames = paste('rep',seq(1,5,1),sep='')
+
+##
+proData = tibble()
+for (i in 1:length(foldersToProcess)){
+  #
+  proTemp = read_tsv(paste(baseRepository,'/',foldersToProcess[i],'/dataProcessing/parsedProteinData.tsv',sep=''),
+                    show_col_types = FALSE) %>%
+    dplyr::rename_with(~sampleNames, contains('sample')) %>%
+    dplyr::mutate(dataset = folderNames[i]) %>%
+    dplyr::rowwise() %>%
+    dplyr::mutate(numNAs = sum(is.na(c_across(rep1:rep5)))) %>%
+    dplyr::filter(numNAs < 1) %>%
+    dplyr::mutate(meanSignal = mean(c_across(rep1:rep5)), 
+                  sdSignal = sd(c_across(rep1:rep5))) %>%
+    dplyr::mutate(cvSignal = (sdSignal / meanSignal)*100)
+  
+  #
+  proData = rbind(proData, proTemp)
+}
+
+
+
+
+##get the metrics
+#across batches
+proDataWide = proData %>%
+  dplyr::select(dataset, accession, gene, meanSignal) %>%
+  tidyr::pivot_wider(id_cols = c('accession', 'gene'), names_from = 'dataset', values_from = 'meanSignal') %>%
+  dplyr::rowwise() %>%
+  dplyr::mutate(numNAs = sum(is.na(c_across(A1:C1)))) %>%
+  dplyr::mutate(meanSignal = mean(c_across(A1:C1)), 
+                sdSignal = sd(c_across(A1:C1))) %>%
+  dplyr::filter(numNAs < 1) %>%
+  dplyr::mutate(cvSignal = (sdSignal / meanSignal)*100)
+compiledData = tibble('dataset' = 'between',
+                      'cvSignal' = proDataWide$cvSignal)
+
+#stability
+proDataWide = proData %>%
+  dplyr::select(dataset, accession, gene, meanSignal) %>%
+  tidyr::pivot_wider(id_cols = c('accession', 'gene'), names_from = 'dataset', values_from = 'meanSignal') %>%
+  dplyr::select(-B1,-C1) %>%
+  dplyr::rowwise() %>%
+  dplyr::mutate(numNAs = sum(is.na(c_across(A1:A2)))) %>%
+  dplyr::filter(numNAs < 1) %>%
+  dplyr::mutate(meanSignal = mean(c_across(A1:A2)), 
+                sdSignal = sd(c_across(A1:A2))) %>%
+  dplyr::mutate(cvSignal = (sdSignal / meanSignal)*100) %>%
+  dplyr::mutate(dataset = 'stability') %>%
+  dplyr::select(dataset, cvSignal)
+compiledData = rbind(compiledData, proDataWide)
+
+#within
+proDataWide = proData %>%
+  dplyr::mutate(dataset = 'within') %>%
+  dplyr::select(dataset, cvSignal)
+compiledData = rbind(compiledData, proDataWide)
+
+#across batches by quartile
+proDataWide = proData %>%
+  dplyr::select(dataset, accession, gene, meanSignal) %>%
+  tidyr::pivot_wider(id_cols = c('accession', 'gene'), names_from = 'dataset', values_from = 'meanSignal') %>%
+  dplyr::rowwise() %>%
+  dplyr::mutate(numNAs = sum(is.na(c_across(A1:C1)))) %>%
+  dplyr::mutate(meanSignal = mean(c_across(A1:C1)), 
+                sdSignal = sd(c_across(A1:C1))) %>%
+  dplyr::filter(numNAs < 1) %>%
+  dplyr::mutate(cvSignal = (sdSignal / meanSignal)*100)
+quantile(proDataWide$meanSignal)
+q1 = dplyr::filter(proDataWide, meanSignal > 0 & meanSignal <= 21.82616) %>%
+  dplyr::mutate('dataset' = 'q1') %>%
+  dplyr::select(dataset, cvSignal)
+q2 = dplyr::filter(proDataWide, meanSignal > 21.82616 &  meanSignal <= 23.03438) %>%
+  dplyr::mutate('dataset' = 'q2') %>%
+  dplyr::select(dataset, cvSignal)
+q3 = dplyr::filter(proDataWide, meanSignal > 23.03438 &  meanSignal <= 24.16654) %>%
+  dplyr::mutate('dataset' = 'q3') %>%
+  dplyr::select(dataset, cvSignal)
+q4 = dplyr::filter(proDataWide, meanSignal > 24.16654 & meanSignal <= 29.33962) %>%
+  dplyr::mutate('dataset' = 'q4') %>%
+  dplyr::select(dataset, cvSignal)
+qData = rbind(q1,q2,q3,q4)
+```
+
+Make plots based on these data.
+
+```{r}
+##########################################################################################
+##within run CV
+proData$dataset = factor(proData$dataset, levels = c('A1','B1','C1','A2'))
+ggplot(proData, aes(dataset, cvSignal)) +
+  geom_boxplot(width = 0.5) +
+  labs(x = 'batch', y = 'Coefficient of variation (%)', title = 'Protein CV after normalization') +
+  scale_y_continuous(limits = c(0,100), breaks = seq(0,100,20)) +
+  theme_classic() +
+  theme(axis.text.y = element_blank(),
+        axis.ticks.y = element_blank())
+ggsave(paste(baseRepository, '/250324_1214_orbitrapLumos/dataOutput/boxplot_proteinCv.pdf', sep = ''),
+         height = 2, width = 2, useDingbats = FALSE)
+statsDataSummary = dplyr::select(proData, cvSignal, dataset) %>%
+  dplyr::group_by(dataset) %>%
+  dplyr::summarise(medianData = median(cvSignal))
+statsDataSummary
+
+##different CV types
+compiledData$dataset = factor(compiledData$dataset, levels = c('within','between','stability'))
+ggplot(compiledData, aes(dataset, cvSignal)) +
+  geom_boxplot(width = 0.5) +
+  labs(x = 'batch', y = 'Coefficient of variation (%)', title = 'Protein CV after normalization') +
+  scale_y_continuous(limits = c(0,100), breaks = seq(0,100,20)) +
+  theme_classic() +
+  theme(axis.text.y = element_blank(),
+        axis.ticks.y = element_blank())
+ggsave(paste(baseRepository, '/250324_1214_orbitrapLumos/dataOutput/boxplot_proteinCvAll.pdf', sep = ''),
+         height = 2, width = 2, useDingbats = FALSE)
+statsDataSummary = dplyr::select(compiledData, cvSignal, dataset) %>%
+  dplyr::group_by(dataset) %>%
+  dplyr::summarise(medianData = median(cvSignal))
+statsDataSummary
+
+
+##by quartile
+qData$dataset = factor(qData$dataset, levels = c('q1','q2','q3','q4'))
+ggplot(qData, aes(dataset, cvSignal)) +
+  geom_boxplot(width = 0.5) +
+  labs(x = 'batch', y = 'Coefficient of variation (%)', title = 'Protein CV after normalization') +
+  scale_y_continuous(limits = c(0,100), breaks = seq(0,100,20)) +
+  theme_classic() +
+  theme(axis.text.y = element_blank(),
+        axis.ticks.y = element_blank())
+ggsave(paste(baseRepository, '/250324_1214_orbitrapLumos/dataOutput/boxplot_proteinCvByQuantile.pdf', sep = ''),
+         height = 2, width = 2, useDingbats = FALSE)
+statsDataSummary = dplyr::select(qData, cvSignal, dataset) %>%
+  dplyr::group_by(dataset) %>%
+  dplyr::summarise(medianData = median(cvSignal))
+statsDataSummary
+```
+
+Plot the Skyline QC data.
+
+```{r}
+##########################################################################################
+##read in the data
+sampleNames = c('fragX','fragY','fragZ')
+skyData = read_tsv(paste(baseRepository,'/250324_1214_orbitrapLumos/skylineQcExample.txt',sep=''),show_col_types = FALSE) %>%
+  dplyr::rename_with(~sampleNames, contains('Peak')) %>%
+  dplyr::select(-dotp) %>%
+  tidyr::pivot_longer(cols = fragX:fragZ, names_to = 'fragment', values_to = 'signal')
+ggplot(skyData, aes(Replicate, signal, fill = fragment)) +
+  geom_col() +
+  scale_fill_manual(values = rev(brewer.pal(6,'Blues')[4:6])) +
+  labs(x = 'QC Run', y = 'Fragment Intensity', title = 'Example QC Peptide') +
+  theme_classic() +
+  theme(axis.text.y = element_blank(),
+        axis.ticks.y = element_blank(),
+        axis.text.x = element_blank(),
+        legend.position = 'none')
+ggsave(paste(baseRepository, '/250324_1214_orbitrapLumos/dataOutput/barplot_qcPeptideExample.pdf', sep = ''),
+         height = 2, width = 2, useDingbats = FALSE)
+
+
+skyDataSummary = skyData %>%
+  dplyr::group_by(Replicate) %>%
+  dplyr::summarise(sumSignal = sum(signal))
+skyDataSummary
+
+
+
+
+
+
+
+
+
+
+
+```
+
+
+
+
+
+
+
+
