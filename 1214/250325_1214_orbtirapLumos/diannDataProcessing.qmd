@@ -29,7 +29,7 @@ I want to set a base directory that we can use as a working space.
 
 ```{r}
 ##########################################################################################
-baseRepository = 'E:/requests/1214/250225_1214_orbitrapLumos'
+baseRepository = 'E:/requests/1214'
 ```
 
 ## Data processing
@@ -41,24 +41,24 @@ Read in data from DIA-NN and process with the IQ package.
 ##first we can filter and parse the report data into a better format for IQ
 ##I had to do some extra stuff here because the sample ID was in a bad format
 ##if you are using DIA-NN version 1.9 or greater, you need to rename the Fragment.Quant column
-foldersToProcess = c('q500ng','q1000ng','q1500ng','q2000ng')
+foldersToProcess = c('250324_1214_orbitrapLumos')
 
 ##loop over these folders
 for (i in 1:length(foldersToProcess)){
   
   #
   dia1 = read_parquet(paste(baseRepository,'/',foldersToProcess[i],'/diannDia1/report.parquet',sep=''),) %>%
-    dplyr::mutate(Run = sub('.*250225_1214_pooledBreastCancerCells_(.*)_dia[123]', '\\1', Run)) %>%
+    dplyr::mutate(Run = sub('.*250324_1214_mohCellLineLysateBatches_(.*)_dia[123]', '\\1', Run)) %>%
     #dplyr::filter(!grepl(';', Protein.Group)) %>%
     dplyr::mutate(fraction = 1)
   #
   dia2 = read_parquet(paste(baseRepository,'/',foldersToProcess[i],'/diannDia1/report.parquet',sep='')) %>%
-    dplyr::mutate(Run = sub('.*250225_1214_pooledBreastCancerCells_(.*)_dia[123]', '\\1', Run)) %>%
+    dplyr::mutate(Run = sub('.*250324_1214_mohCellLineLysateBatches_(.*)_dia[123]', '\\1', Run)) %>%
     #dplyr::filter(!grepl(';', Protein.Group)) %>%
     dplyr::mutate(fraction = 2)
   #
   dia3 = read_parquet(paste(baseRepository,'/',foldersToProcess[i],'/diannDia1/report.parquet',sep='')) %>%
-    dplyr::mutate(Run = sub('.*250225_1214_pooledBreastCancerCells_(.*)_dia[123]', '\\1', Run)) %>%
+    dplyr::mutate(Run = sub('.*250324_1214_mohCellLineLysateBatches_(.*)_dia[123]', '\\1', Run)) %>%
     #dplyr::filter(!grepl(';', Protein.Group)) %>%
     dplyr::mutate(fraction = 3)
 
@@ -66,7 +66,7 @@ for (i in 1:length(foldersToProcess)){
   raw = rbind(dia1,dia2,dia3)
 
   ##save the data
-  write.table(raw, paste(baseRepository,'/',foldersToProcess[i],'/q500ng/dataProcessing/combinedFilteredReportAnnotated.tsv',sep=''), 
+  write.table(raw, paste(baseRepository,'/',foldersToProcess[i],'/dataProcessing/combinedFilteredReportAnnotated.tsv',sep=''), 
               col.names = TRUE, row.names = FALSE, quote = FALSE, sep = '\t')
 
   ##run the IQ analysis
@@ -87,7 +87,7 @@ for (i in 1:length(foldersToProcess)){
                                  peptide_extractor = function(x) gsub("[0-9].*$", "", x))
 
   ##do the same for the human index
-  annotationDb = readRDS(paste(baseRepository, '/databases/2025-03-04-reviewed-UP000005640-spikein.fasta_index_trypticPeps.rds',sep='')) %>%
+  annotationDb = readRDS(paste(baseRepository, '/',foldersToProcess[i], '/databases/2025-03-04-reviewed-UP000005640-spikein.fasta_index_trypticPeps.rds',sep='')) %>%
     dplyr::select(-species) %>%
     dplyr::filter(!grepl('sp\\|V.*',gene))
 
