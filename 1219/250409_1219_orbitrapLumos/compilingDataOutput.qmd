@@ -1,0 +1,85 @@
+---
+title: "fairn lab data processing"
+author: "Christopher Hughes"
+format: html
+---
+
+## Details
+
+This document describes processing Fragpipe data for comparison purposes.
+
+## Setting up the environment
+
+These are packages you will need for this notebook. For exact versions used, please refer to the session info at the bottom of this notebook.
+
+```{r}
+#| message: false
+#| warning: false
+##########################################################################################
+library('tidyverse')
+```
+
+I want to set a base directory that we can use for our analysis.
+
+```{r}
+##########################################################################################
+baseRepository = 'E:/requests/1219/250409_1219_orbitrapLumos'
+```
+
+## Data processing
+
+Process the fragpipe data.
+
+```{r}
+##########################################################################################
+##process the sample data
+##read in the protein result file
+sampleReps = c(seq(1,3,1))
+sampleNames = c('EV','M210delta','FLdeltadelta')
+sampleTreatments = c('control','polyIC')
+#
+foldersToProcess = c(paste(rep(sampleTreatments,each=3),'_',rep(sampleNames,each=6),'_',rep(sampleReps,6),sep=''))
+
+##parse the data
+compiledProteinData = tibble()
+for (i in 1:length(foldersToProcess)){
+  proTemp = read_tsv(paste(baseRepository,'/fragpipeFirstPass/',foldersToProcess[i],'/proteinProcessed.tsv',sep=''),show_col_types = FALSE) %>%
+    dplyr::select(accession, gene, uniqueSpectralCount, iBAQ) %>%
+    dplyr::filter(uniqueSpectralCount >= 1) %>%
+    dplyr::mutate(dataset = foldersToProcess[i])
+  #
+  compiledProteinData = rbind(compiledProteinData, proTemp)
+}
+
+#read in annotation details
+annotationDb = readRDS(paste(baseRepository, '/databases/2025-04-10-reviewed-UP000005640-spikein.fasta_index_trypticPeps.rds',sep=''))
+
+#transform the data into wide format
+proteinWide = compiledProteinData %>%
+  tidyr::pivot_wider(id_cols = c('accession','gene'), names_from = 'dataset', values_from = c('uniqueSpectralCount','iBAQ')) %>%
+  dplyr::left_join(annotationDb)
+
+
+#calculate NA values
+firstSample = seq(3,18,3)
+lastSample = seq(5,20,3)
+for (i in 1:length(firstSample)){
+  proteinWide[,43+i] = rowSums(is.na(proteinWide[,firstSample[i]:lastSample[i]]))
+  colnames(proteinWide)[43+i] = paste('sampleSet',i,sep='')
+}
+
+#filter NA values
+proteinFilter = proteinWide %>%
+  dplyr::filter(sampleSet1 == 0 |
+                  sampleSet2 == 0 |
+                  sampleSet3 == 0 |
+                  sampleSet4 == 0 |
+                  sampleSet5 == 0 |
+                  sampleSet6 == 0) %>%
+  dplyr::select(accession:detectablePeptides)
+
+#save the data
+write.table(proteinFilter, paste(baseRepository,'/compiledProteinData.tsv',sep=''),
+            row.names = FALSE, quote = FALSE, sep = '\t')
+                
+```
