@@ -27,7 +27,7 @@ I want to set a base directory that we can use for our analysis.
 
 ```{r}
 ##########################################################################################
-baseRepository = 'E:/requests/1225/250513_1225_orbitrapLumos'
+baseRepository = 'E:/requests/1223/250509_1223_orbitrapLumos'
 ```
 
 ## Data processing
