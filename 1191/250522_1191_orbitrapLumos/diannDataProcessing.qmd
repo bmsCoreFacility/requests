@@ -29,7 +29,7 @@ I want to set a base directory that we can use as a working space.
 
 ```{r}
 ##########################################################################################
-baseRepository = 'E:/requests/1223/250508_1223_orbitrapLumos'
+baseRepository = 'E:/requests/1191/250522_1191_orbitrapLumos'
 ```
 
 ## Data processing
@@ -43,19 +43,19 @@ Read in data from DIA-NN and process with the IQ package.
 ##if you are using DIA-NN version 1.9 or greater, you need to rename the Fragment.Quant column
 #
 dia1 = read_parquet(paste(baseRepository, '/diannDia1/report.parquet',sep=''),) %>%
-  dplyr::mutate(Run = sub('.*250508_1223_jf_mouseTissuesTotalProteome_(.*)_dia[123]', '\\1', Run)) %>%
+  dplyr::mutate(Run = sub('.*250522_1191_zc_mouseTissueProteome_(.*)_dia[123]', '\\1', Run)) %>%
   #dplyr::filter(!grepl(';', Protein.Group)) %>%
   dplyr::mutate(fraction = 1)
 
 #
 dia2 = read_parquet(paste(baseRepository, '/diannDia2/report.parquet',sep='')) %>%
-  dplyr::mutate(Run = sub('.*250508_1223_jf_mouseTissuesTotalProteome_(.*)_dia[123]', '\\1', Run)) %>%
+  dplyr::mutate(Run = sub('.*250522_1191_zc_mouseTissueProteome_(.*)_dia[123]', '\\1', Run)) %>%
  #dplyr::filter(!grepl(';', Protein.Group)) %>%
   dplyr::mutate(fraction = 2)
 
 #
 dia3 = read_parquet(paste(baseRepository, '/diannDia3/report.parquet',sep='')) %>%
-  dplyr::mutate(Run = sub('.*250508_1223_jf_mouseTissuesTotalProteome_(.*)_dia[123]', '\\1', Run)) %>%
+  dplyr::mutate(Run = sub('.*250522_1191_zc_mouseTissueProteome_(.*)_dia[123]', '\\1', Run)) %>%
   #dplyr::filter(!grepl(';', Protein.Group)) %>%
   dplyr::mutate(fraction = 3)
 
@@ -101,7 +101,7 @@ numberOfSamples = sum(grepl('sample',colnames(proData)))
 proDataAnnotated = proData %>%
   dplyr::select(accession:n_peptides, gene:detectableLength, 
                 sort(factor(colnames(proData)[order(colnames(proData)[6:(numberOfSamples+5)])+5],
-                            levels=c(paste('sample',seq(1,numberOfSamples,1),sep=''))))) %>%
+                            levels=c(paste('sample',seq(1,0+numberOfSamples,1),sep=''))))) %>%
   dplyr::rename_with(~ annoData$sampleName[1:numberOfSamples], starts_with('sample')) %>%
   dplyr::arrange(-n_peptides) %>%
   dplyr::filter(!grepl('CONT',accession))
@@ -124,7 +124,7 @@ annotationDb = readRDS(paste(baseRepository, '/databases/2025-05-29-reviewed-UP0
   dplyr::filter(!grepl('sp\\|V.*',gene)) #removes viral accessions
 
 ##rename the columns and setup the comparisons
-conditionsToCompare = c('KO')
+conditionsToCompare = c('dprpL')
 controlCondition = 'WT'
 
 #
@@ -134,26 +134,22 @@ for (i in 1:length(conditionsToCompare)){
                          which(names(processedData) == paste(controlCondition,'1', sep = '')),
                          which(names(processedData) == paste(controlCondition,'2', sep = '')),
                          which(names(processedData) == paste(controlCondition,'3', sep = '')),
-                         which(names(processedData) == paste(controlCondition,'4', sep = '')),
                          which(names(processedData) == paste(conditionsToCompare[i],'1', sep = '')),
                          which(names(processedData) == paste(conditionsToCompare[i],'2', sep = '')),
-                         which(names(processedData) == paste(conditionsToCompare[i],'3', sep = '')),
-                         which(names(processedData) == paste(conditionsToCompare[i],'4', sep = '')))]
-  dat$samples123 = rowSums(is.na(dat[,3:6]))
-  dat$samples456 = rowSums(is.na(dat[,7:10]))
-  colnames(dat)[3:6] = c('cont_rep1','cont_rep2','cont_rep3','cont_rep4')
-  colnames(dat)[7:10] = c('treat_rep1','treat_rep2','treat_rep3','treat_rep4')
+                         which(names(processedData) == paste(conditionsToCompare[i],'3', sep = '')))]
+  dat$samples123 = rowSums(is.na(dat[,3:5]))
+  dat$samples456 = rowSums(is.na(dat[,6:8]))
+  colnames(dat)[3:5] = c('cont_rep1','cont_rep2','cont_rep3')
+  colnames(dat)[6:8] = c('treat_rep1','treat_rep2','treat_rep3')
   #
   datFiltered = as.data.frame(dat) %>%
     dplyr::filter(samples123 < 1 | samples456 < 1) %>%
-    dplyr::mutate(cont_rep1 = ifelse(samples123 == 4, min(cont_rep1, na.rm = TRUE), cont_rep1),
-                  cont_rep2 = ifelse(samples123 == 4, min(cont_rep2, na.rm = TRUE), cont_rep2),
-                  cont_rep3 = ifelse(samples123 == 4, min(cont_rep3, na.rm = TRUE), cont_rep3),
-                  cont_rep4 = ifelse(samples123 == 4, min(cont_rep4, na.rm = TRUE), cont_rep4)) %>%
-    dplyr::mutate(treat_rep1 = ifelse(samples456 == 4, min(treat_rep1, na.rm = TRUE), treat_rep1),
-                  treat_rep2 = ifelse(samples456 == 4, min(treat_rep2, na.rm = TRUE), treat_rep2),
-                  treat_rep3 = ifelse(samples456 == 4, min(treat_rep3, na.rm = TRUE), treat_rep3),
-                  treat_rep4 = ifelse(samples456 == 4, min(treat_rep4, na.rm = TRUE), treat_rep4))
+    dplyr::mutate(cont_rep1 = ifelse(samples123 == 3, min(cont_rep1, na.rm = TRUE), cont_rep1),
+                  cont_rep2 = ifelse(samples123 == 3, min(cont_rep2, na.rm = TRUE), cont_rep2),
+                  cont_rep3 = ifelse(samples123 == 3, min(cont_rep3, na.rm = TRUE), cont_rep3)) %>%
+    dplyr::mutate(treat_rep1 = ifelse(samples456 == 3, min(treat_rep1, na.rm = TRUE), treat_rep1),
+                  treat_rep2 = ifelse(samples456 == 3, min(treat_rep2, na.rm = TRUE), treat_rep2),
+                  treat_rep3 = ifelse(samples456 == 3, min(treat_rep3, na.rm = TRUE), treat_rep3))
   #
   rownames(datFiltered) = datFiltered$accession
   dat.log = datFiltered %>%
@@ -162,8 +158,8 @@ for (i in 1:length(conditionsToCompare)){
   #boxplot(dat.log, las = 2, main = 'total protein abundance')
   
   ##make a design table
-  cond = as.factor(c(rep('cont',4),
-                    rep('treat',4)))
+  cond = as.factor(c(rep('cont',3),
+                    rep('treat',3)))
   design = model.matrix(~0+cond)
   colnames(design) = gsub('cond', '', colnames(design))
   
