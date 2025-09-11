@@ -1,0 +1,155 @@
+---
+title: "diannDataProcessing"
+author: "Christopher Hughes"
+format: html
+editor: visual
+---
+
+## Details
+
+This document describes processing of proteomics data from DIANN to compile a final protein set.
+
+## Setting up the environment
+
+These are packages you will need for this notebook. For exact versions used, please refer to the session info at the bottom of this notebook.
+
+```{r}
+#| message: false
+#| warning: false
+##########################################################################################
+library('tidyverse')
+library('arrow')
+library('iq')
+library('DEqMS')
+library('RColorBrewer')
+library('ggrepel')
+```
+
+I want to set a base directory that we can use as a working space.
+
+```{r}
+##########################################################################################
+baseRepository = 'E:/requests/1192/250904_1192_orbitrapLumos'
+```
+
+## Data processing
+
+Read in data from DIA-NN and process with the IQ package.
+
+```{r}
+##########################################################################################
+##define the sample names
+sampleDetails = readxl::read_xlsx(paste(baseRepository,'/Sample_name_correlation-1192-20250825.xlsx',sep=''),
+                                  col_names = c('bmsId','userId'),
+                                  skip = 1)
+
+##read in the annotation index
+annotationDb = readRDS(paste(baseRepository, '/databases/2025-09-09-reviewed-UP000005640-spikein.fasta_index_trypticPeps.rds',sep='')) %>%
+  dplyr::select(-species) %>%
+  dplyr::filter(!grepl('sp\\|V.*',gene))
+
+
+
+##read in the results file from DIA-NN
+dia1 = read_tsv(paste(baseRepository,'/diannDia1/report.pg_matrix.tsv',sep=''),show_col_types = FALSE,
+                col_names = c('accession','proteinNames','gene','description','n_sequences','n_proteotypicSequences',
+                              sampleDetails$userId),
+                skip = 1) %>%
+  dplyr::filter(n_proteotypicSequences > 0 & !grepl(';',accession)) %>%
+  dplyr::left_join(annotationDb) %>%
+  dplyr::mutate(description = ifelse(grepl('VIRUS',accession), proteinNames, description)) %>%
+  dplyr::select(-proteinNames)
+  
+##save the data
+saveRDS(dia1, paste(baseRepository, '/dataProcessing/parsedProteinData.rds', sep = ''))
+write.table(dia1, paste(baseRepository, '/dataProcessing/parsedProteinData.tsv', sep = ''), 
+            col.names = TRUE, row.names = FALSE, quote = FALSE, sep = '\t')
+```
+
+Perform differential expression analysis on the data.
+
+```{r}
+##########################################################################################
+##I am going to do one-by-one comparisons
+processedData = readRDS(paste(baseRepository, '/dataProcessing/parsedProteinData.rds', sep = ''))
+
+##read in the annotation details again
+annotationDb = readRDS(paste(baseRepository, '/databases/2025-09-09-reviewed-UP000005640-spikein.fasta_index_trypticPeps.rds',sep='')) %>%
+  dplyr::select(-species) %>%
+  dplyr::filter(!grepl('sp\\|V.*',gene))
+
+##rename the columns and setup the comparisons
+#conditionsToCompare = c('WT_24h','WT_48h','WT_72h')
+#controlCondition = 'WT_LAT'
+conditionsToCompare = c('deltaK3_24h','deltaK3_48h','deltaK3_72h')
+controlCondition = 'deltaK3_LAT'
+
+#
+for (i in 1:length(conditionsToCompare)){
+  dat = processedData[,c(which(names(processedData) == 'accession'),
+                         which(names(processedData) == 'gene'),      
+                         which(names(processedData) == paste('A_',controlCondition, sep = '')),
+                         which(names(processedData) == paste('B_',controlCondition, sep = '')),
+                         which(names(processedData) == paste('C_',controlCondition, sep = '')),
+                         which(names(processedData) == paste('A_',conditionsToCompare[i], sep = '')),
+                         which(names(processedData) == paste('B_',conditionsToCompare[i], sep = '')),
+                         which(names(processedData) == paste('C_',conditionsToCompare[i], sep = '')))]
+  dat$samples123 = rowSums(is.na(dat[,3:5]))
+  dat$samples456 = rowSums(is.na(dat[,6:8]))
+  colnames(dat)[3:5] = c('cont_rep1','cont_rep2','cont_rep3')
+  colnames(dat)[6:8] = c('treat_rep1','treat_rep2','treat_rep3')
+  #
+  datFiltered = as.data.frame(dat) %>%
+    dplyr::filter(samples123 < 1 | samples456 < 1) %>%
+    dplyr::mutate(cont_rep1 = ifelse(samples123 == 3, min(cont_rep1, na.rm = TRUE), cont_rep1),
+                  cont_rep2 = ifelse(samples123 == 3, min(cont_rep2, na.rm = TRUE), cont_rep2),
+                  cont_rep3 = ifelse(samples123 == 3, min(cont_rep3, na.rm = TRUE), cont_rep3)) %>%
+    dplyr::mutate(treat_rep1 = ifelse(samples456 == 3, min(treat_rep1, na.rm = TRUE), treat_rep1),
+                  treat_rep2 = ifelse(samples456 == 3, min(treat_rep2, na.rm = TRUE), treat_rep2),
+                  treat_rep3 = ifelse(samples456 == 3, min(treat_rep3, na.rm = TRUE), treat_rep3))
+  #
+  rownames(datFiltered) = datFiltered$accession
+  dat.log = datFiltered %>%
+    dplyr::select(-accession, -gene, -samples123, -samples456)
+  #dat.log = na.omit(datFiltered)
+  #boxplot(dat.log, las = 2, main = 'total protein abundance')
+  
+  ##make a design table
+  cond = as.factor(c(rep('cont',3),
+                    rep('treat',3)))
+  design = model.matrix(~0+cond)
+  colnames(design) = gsub('cond', '', colnames(design))
+  
+  ##make the contrasts
+  x = c('treat-cont')
+  contrast = makeContrasts(contrasts = x, levels = design)
+  fit1 = lmFit(dat.log, design)
+  fit2 = contrasts.fit(fit1, contrasts = contrast)
+  fit3 = eBayes(fit2)
+
+  ##add information about PSM counts
+  forPsm = processedData
+  psm.count.table = data.frame(count = forPsm$n_sequences,
+                               row.names = forPsm$accession)
+  fit3$count = psm.count.table[rownames(fit3$coefficients),'count']
+  fit4 = spectraCounteBayes(fit3)
+  #VarianceBoxplot(fit4, n = 30, main = 'total proteome dataset', xlab = 'psm count')
+  #VarianceScatterplot(fit4, main = 'total proteome dataset')
+  
+  ##extract the data
+  #head(fit4$coefficients)
+  psmAnnotate = dplyr::select(forPsm, accession, gene, n_sequences, n_proteotypicSequences)
+  valuesAnnotate = dplyr::select(datFiltered, accession, gene, samples123, samples456) %>%
+    dplyr::rename(controlMissingValues = 'samples123',
+                  conditionMissingValues = 'samples456')
+  deqmsResults = tibble(outputResult(fit4, coef_col = 1)) %>%
+    dplyr::rename(accession = 'gene') %>%
+    dplyr::left_join(psmAnnotate) %>%
+    dplyr::left_join(annotationDb) %>%
+    dplyr::left_join(valuesAnnotate)
+  #
+  saveRDS(deqmsResults, paste(baseRepository, '/dataProcessing/dataset_deqms_', conditionsToCompare[i], '-', controlCondition, '.rds', sep = ''))
+  write.table(deqmsResults, paste(baseRepository, '/dataProcessing/dataset_deqms_', conditionsToCompare[i], '-', controlCondition, '.tsv', sep = ''),
+              col.names = TRUE, row.names = FALSE, sep = '\t', quote = FALSE)
+  }
+```

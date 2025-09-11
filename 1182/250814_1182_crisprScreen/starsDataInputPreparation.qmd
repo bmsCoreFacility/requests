@@ -1,0 +1,123 @@
+---
+title: "fairn lab data processing"
+author: "Christopher Hughes"
+format: html
+---
+
+## Details
+
+This document describes preparing CRISPR count data to be input into the Broad CRISPR analysis tool.
+
+## Setting up the environment
+
+These are packages you will need for this notebook. For exact versions used, please refer to the session info at the bottom of this notebook.
+
+```{r}
+#| message: false
+#| warning: false
+##########################################################################################
+library('tidyverse')
+```
+
+I want to set a base directory that we can use for our analysis.
+
+```{r}
+##########################################################################################
+baseRepository = 'E:/requests/1182/250814_1182_crisprScreen'
+```
+
+## Data processing
+
+Process the fragpipe data.
+
+```{r}
+##########################################################################################
+##barcodes
+#barcodes = c('AAGAGGCA-TACTCCTT',
+#             'AGGCAGAA-AGAGGATA',
+#             'ATCTCAGG-AGGCTTAG', 
+#             'CGAGGCTG-TATGCAGT', 
+#             'CGTACTAG-ATAGAGAG', 
+#             'CGTACTAG-CGGAGAGA', 
+#             'CTCTCTAC-TATGCAGT', 
+#             'GCTCATGA-AGGCTTAG', 
+#             'GGACTCCT-CTCCTTAC', 
+#             'GTAGAGGA-TACTCCTT', 
+#             'TAAGGCGA-ATAGAGAG', 
+#             'TAAGGCGA-ATTAGACG', 
+#             'TAGGCATG-CTCCTTAC', 
+#             'TCCTGAGC-AGAGGATA')
+barcodes = read_tsv(paste(baseRepository,'/haifengReference.txt',sep=''), show_col_types = FALSE)
+
+##reference file
+brunelloRef = read_csv(paste(baseRepository,'/brunelloGuidesModified.csv',sep=''), show_col_types = FALSE,
+                       col_names = c('guide','seq','gene'),
+                       skip = 1)
+
+#loop through the barcodes and transform the guide-counter result into scores
+combinedCounts = tibble()
+for (i in 1:length(barcodes$barcode)){
+  countTemp = read_tsv(paste(baseRepository,'/guideCounterOutput/',barcodes$barcode[i],'.counts.txt',sep=''),
+                       col_names = c('guide','gene','counts'),
+                       skip = 1,
+                       show_col_types = FALSE) %>%
+    dplyr::mutate(score = log2(((counts / sum(counts, na.rm = TRUE))*1e6)+1)) %>%
+    dplyr::left_join(brunelloRef) %>%
+    dplyr::mutate(condition = barcodes$sample[i]) %>%
+    dplyr::select(condition,seq,score)
+  
+  #combine
+  combinedCounts = rbind(combinedCounts, countTemp)
+}
+
+#make into wide format
+countsWide = combinedCounts %>%
+  tidyr::pivot_wider(id_cols = 'seq', names_from = 'condition', values_from = 'score')
+
+#output files
+write_tsv(countsWide, paste(baseRepository,'/guideCounterOutput/totalCountMatrix_broadInput.txt',sep=''))
+
+#total count matrix
+totalCounts = countsWide %>%
+  dplyr::left_join(brunelloRef) %>%
+  dplyr::relocate(guide, seq, gene, 
+                  ABR_T0_1, ABR_T0_2, ABR_T0_3,
+                  ABR_B0_1, ABR_B0_2, ABR_B0_3,
+                  ABR_B40_1, ABR_B40_2, ABR_B40_3,
+                  ABR_B_Se_1, ABR_B_Se_2, ABR_B_Se_3,
+                  A_IL_L20, A_IL_H20)
+write_tsv(totalCounts, paste(baseRepository,'/guideCounterOutput/totalCountMatrix.txt',sep=''))
+
+#comparison for +/-BSO
+comparisonData = countsWide %>%
+  dplyr::select(seq,
+                  ABR_B0_1,ABR_B0_2,ABR_B0_3,
+                  ABR_B40_1,ABR_B40_2,ABR_B40_3) %>%
+  dplyr::rowwise() %>%
+  dplyr::mutate(cond1_mean = mean(c_across(ABR_B0_1:ABR_B0_3), na.rm = TRUE),
+                cond2_mean = mean(c_across(ABR_B40_1:ABR_B40_3), na.rm = TRUE)) %>%
+  dplyr::mutate(fcScore = cond2_mean - cond1_mean) %>%
+  dplyr::select(seq, fcScore)
+write_tsv(comparisonData, paste(baseRepository,'/guideCounterOutput/comparisonMatrix_B40-vs-B0_broadInput.txt',sep=''))
+  
+  
+#comparison for +/-Se
+comparisonData = countsWide %>%
+  dplyr::select(seq,
+                  ABR_B_Se_1,ABR_B_Se_2,ABR_B_Se_3,
+                  ABR_B40_1,ABR_B40_2,ABR_B40_3) %>%
+  dplyr::rowwise() %>%
+  dplyr::mutate(cond1_mean = mean(c_across(ABR_B_Se_1:ABR_B_Se_3), na.rm = TRUE),
+                cond2_mean = mean(c_across(ABR_B40_1:ABR_B40_3), na.rm = TRUE)) %>%
+  dplyr::mutate(fcScore = cond2_mean - cond1_mean) %>%
+  dplyr::select(seq, fcScore)
+write_tsv(comparisonData, paste(baseRepository,'/guideCounterOutput/comparisonMatrix_B40-vs-Se_broadInput.txt',sep=''))  
+  
+  
+  
+  
+  
+  
+  
+                
+```
