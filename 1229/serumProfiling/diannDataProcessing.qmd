@@ -1,0 +1,262 @@
+---
+title: "diannDataProcessing"
+author: "Christopher Hughes"
+format: html
+editor: visual
+---
+
+## Details
+
+This document describes processing of proteomics data from DIANN to compile a final protein set.
+
+## Setting up the environment
+
+These are packages you will need for this notebook. For exact versions used, please refer to the session info at the bottom of this notebook.
+
+```{r}
+#| message: false
+#| warning: false
+##########################################################################################
+library('tidyverse')
+library('arrow')
+library('iq')
+library('DEqMS')
+library('RColorBrewer')
+library('ggrepel')
+```
+
+I want to set a base directory that we can use as a working space.
+
+```{r}
+##########################################################################################
+baseRepository = 'E:/requests/1229'
+```
+
+## Data processing
+
+Read in data from DIA-NN and process it to filtered sets. Do this for the serum and flowthrough data sets. 
+
+```{r}
+##########################################################################################
+##we are using the data directly from DIA-NN because these were only single injections
+diaData = read_tsv(paste(baseRepository,'/serumProfiling/diannDia1/report.pg_matrix.tsv',sep=''),
+                   show_col_types = FALSE) %>%
+  dplyr::filter(!grepl(';',Protein.Group)) %>%
+  dplyr::filter(`N.Proteotypic.Sequences` > 0)
+
+##parse the column names and update in the original tibble
+colNameData = tibble('original' = colnames(diaData)[7:ncol(diaData)]) %>%
+  dplyr::mutate('updated' = sub('.*Profiling_(.*)_dia1.*','\\1',original))
+colnames(diaData)[7:ncol(diaData)] = colNameData$updated
+colnames(diaData)[1:6] = c('accession',
+                           'proteinName',
+                           'gene',
+                           'description',
+                           'n_sequences',
+                           'n_proteotypic')
+
+
+##filter the data based on the number of observations of a protein
+diaDataSet1 = diaData[,c(1:6,which(grepl('SP1',colnames(diaData))))]
+diaDataSet1$numNA = rowSums(is.na(diaDataSet1[,7:51]))
+write.table(diaDataSet1, paste(baseRepository, '/dataProcessing/serum_set1_parsedProteinData.tsv', sep = ''), 
+            col.names = TRUE, row.names = FALSE, quote = FALSE, sep = '\t')
+saveRDS(diaDataSet1, paste(baseRepository, '/dataProcessing/serum_set1_parsedProteinData.rds', sep = ''))
+
+##plot the missing data
+ggplot(diaDataSet1, aes(numNA, group=1)) +
+  geom_histogram(binwidth = 1) +
+  labs(title = 'number of missing values, dataset 1', x = 'number of missing values', y = 'count') +
+  theme_classic()
+ggsave(paste(baseRepository,'/dataProcessing/histogram_missingValues_dataset1.pdf',sep=''))
+
+##filter the data
+diaDataSet1Filtered = dplyr::filter(diaDataSet1, numNA <= 20)
+write.table(diaDataSet1Filtered, paste(baseRepository, '/dataProcessing/serum_set1_parsedProteinDataFiltered.tsv', sep = ''), 
+            col.names = TRUE, row.names = FALSE, quote = FALSE, sep = '\t')
+saveRDS(diaDataSet1Filtered, paste(baseRepository, '/dataProcessing/serum_set1_parsedProteinDataFiltered.rds', sep = ''))
+
+
+##repeat this process for the second set of data
+##filter the data based on the number of observations of a protein
+diaDataSet2 = diaData[,c(1:6,which(grepl('SP2',colnames(diaData))))]
+diaDataSet2$numNA = rowSums(is.na(diaDataSet2[,7:51]))
+write.table(diaDataSet2, paste(baseRepository, '/dataProcessing/serum_set2_parsedProteinData.tsv', sep = ''), 
+            col.names = TRUE, row.names = FALSE, quote = FALSE, sep = '\t')
+saveRDS(diaDataSet2, paste(baseRepository, '/dataProcessing/serum_set2_parsedProteinData.rds', sep = ''))
+
+##plot the missing data
+ggplot(diaDataSet2, aes(numNA, group=1)) +
+  geom_histogram(binwidth = 1) +
+  labs(title = 'number of missing values, dataset 2', x = 'number of missing values', y = 'count') +
+  theme_classic()
+ggsave(paste(baseRepository,'/dataProcessing/histogram_missingValues_dataset2.pdf',sep=''))
+
+##filter the data
+diaDataSet2Filtered = dplyr::filter(diaDataSet2, numNA <= 20)
+write.table(diaDataSet2Filtered, paste(baseRepository, '/dataProcessing/serum_set2_parsedProteinDataFiltered.tsv', sep = ''), 
+            col.names = TRUE, row.names = FALSE, quote = FALSE, sep = '\t')
+saveRDS(diaDataSet2Filtered, paste(baseRepository, '/dataProcessing/serum_set2_parsedProteinDataFiltered.rds', sep = ''))
+
+
+
+
+##########################################################################################
+##below is for the flowthrough data
+##we are using the data directly from DIA-NN because these were only single injections
+diaData = read_tsv(paste(baseRepository,'/flowthroughProfiling/diannDia1/report.pg_matrix.tsv',sep=''),
+                   show_col_types = FALSE) %>%
+  dplyr::filter(!grepl(';',Protein.Group)) %>%
+  dplyr::filter(`N.Proteotypic.Sequences` > 0)
+
+##parse the column names and update in the original tibble
+colNameData = tibble('original' = colnames(diaData)[7:ncol(diaData)]) %>%
+  dplyr::mutate('updated' = sub('.*Profiling_(.*)_dia1.*','\\1',original))
+colnames(diaData)[7:ncol(diaData)] = colNameData$updated
+colnames(diaData)[1:6] = c('accession',
+                           'proteinName',
+                           'gene',
+                           'description',
+                           'n_sequences',
+                           'n_proteotypic')
+
+
+##filter the data based on the number of observations of a protein
+diaDataSet1 = diaData[,c(1:6,which(grepl('SE',colnames(diaData))))]
+diaDataSet1$numNA = rowSums(is.na(diaDataSet1[,7:51]))
+write.table(diaDataSet1, paste(baseRepository, '/dataProcessing/flowthrough_set1_parsedProteinData.tsv', sep = ''), 
+            col.names = TRUE, row.names = FALSE, quote = FALSE, sep = '\t')
+saveRDS(diaDataSet1, paste(baseRepository, '/dataProcessing/flowthrough_set1_parsedProteinData.rds', sep = ''))
+
+##plot the missing data
+ggplot(diaDataSet1, aes(numNA, group=1)) +
+  geom_histogram(binwidth = 1) +
+  labs(title = 'number of missing values, dataset 1', x = 'number of missing values', y = 'count') +
+  theme_classic()
+ggsave(paste(baseRepository,'/dataProcessing/histogram_missingValues_dataset1.pdf',sep=''))
+
+##filter the data
+diaDataSet1Filtered = dplyr::filter(diaDataSet1, numNA <= 20)
+write.table(diaDataSet1Filtered, paste(baseRepository, '/dataProcessing/flowthrough_set1_parsedProteinDataFiltered.tsv', sep = ''), 
+            col.names = TRUE, row.names = FALSE, quote = FALSE, sep = '\t')
+saveRDS(diaDataSet1Filtered, paste(baseRepository, '/dataProcessing/flowthrough_set1_parsedProteinDataFiltered.rds', sep = ''))
+```
+
+Take a look at the QC proteins we had spiked to examine instrument performance.
+
+```{r}
+##########################################################################################
+##read in the data for the two sets
+set1 = readRDS(paste(baseRepository, '/dataProcessing/serum_set1_parsedProteinData.rds', sep = '')) %>%
+  dplyr::select(accession, SP1_1:SP1_45)
+set2 = readRDS(paste(baseRepository, '/dataProcessing/serum_set2_parsedProteinData.rds', sep = '')) %>%
+  dplyr::select(accession, SP2_1:SP2_45)
+
+##combine and filter for our two QC proteins
+qcSet = dplyr::left_join(set1, set2, by = c('accession')) %>%
+  dplyr::filter(grepl('CONT117',accession) | grepl('CONT118',accession)) %>%
+  dplyr::mutate('gene' = ifelse(grepl('CONT117',accession), 'rnase1','enolase')) %>%
+  dplyr::select(-accession) %>%
+  tidyr::pivot_longer(cols = SP1_1:SP2_45, names_to = 'dataset', values_to = 'signal')
+
+##CONT117 is RNASE1, spiked into the digested samples
+##CONT118 is enolase, spiked in pre-SP3
+ggplot(qcSet, aes(dataset, log2(signal), color = gene)) +
+  geom_point() +
+  scale_y_continuous(limits = c(10,34), breaks = seq(0,40,4))
+
+
+
+```
+
+The code below is not used for this analysis, but I will leave it here in case I want to use it later.
+
+Perform differential expression analysis on the data.
+
+```{r}
+##########################################################################################
+##I am going to do one-by-one comparisons
+processedData = readRDS(paste(baseRepository, '/dataProcessing/parsedProteinData.rds', sep = ''))
+
+##read in the annotation details again
+annotationDb = readRDS(paste(baseRepository, '/databases/2025-09-09-reviewed-UP000005640-spikein.fasta_index_trypticPeps.rds',sep='')) %>%
+  dplyr::select(-species)
+
+##rename the columns and setup the comparisons
+#conditionsToCompare = c('latest_HO22')
+#controlCondition = 'latest_EtOH'
+#conditionsToCompare = c('t48h_HO22')
+#controlCondition = 't48h_EtOH'
+conditionsToCompare = c('t72h_HO22')
+controlCondition = 't72h_EtOH'
+
+
+#
+for (i in 1:length(conditionsToCompare)){
+  dat = processedData[,c(which(names(processedData) == 'accession'),
+                         which(names(processedData) == 'gene'),      
+                         which(names(processedData) == paste(controlCondition,'_A', sep = '')),
+                         which(names(processedData) == paste(controlCondition,'_B', sep = '')),
+                         which(names(processedData) == paste(controlCondition,'_C', sep = '')),
+                         which(names(processedData) == paste(conditionsToCompare[i],'_A', sep = '')),
+                         which(names(processedData) == paste(conditionsToCompare[i],'_B', sep = '')),
+                         which(names(processedData) == paste(conditionsToCompare[i],'_C', sep = '')))]
+  dat$samples123 = rowSums(is.na(dat[,3:5]))
+  dat$samples456 = rowSums(is.na(dat[,6:8]))
+  colnames(dat)[3:5] = c('cont_rep1','cont_rep2','cont_rep3')
+  colnames(dat)[6:8] = c('treat_rep1','treat_rep2','treat_rep3')
+  #
+  datFiltered = as.data.frame(dat) %>%
+    dplyr::filter(samples123 < 1 | samples456 < 1) %>%
+    dplyr::mutate(cont_rep1 = ifelse(samples123 == 3, min(cont_rep1, na.rm = TRUE), cont_rep1),
+                  cont_rep2 = ifelse(samples123 == 3, min(cont_rep2, na.rm = TRUE), cont_rep2),
+                  cont_rep3 = ifelse(samples123 == 3, min(cont_rep3, na.rm = TRUE), cont_rep3)) %>%
+    dplyr::mutate(treat_rep1 = ifelse(samples456 == 3, min(treat_rep1, na.rm = TRUE), treat_rep1),
+                  treat_rep2 = ifelse(samples456 == 3, min(treat_rep2, na.rm = TRUE), treat_rep2),
+                  treat_rep3 = ifelse(samples456 == 3, min(treat_rep3, na.rm = TRUE), treat_rep3))
+  #
+  rownames(datFiltered) = datFiltered$accession
+  dat.log = datFiltered %>%
+    dplyr::select(-accession, -gene, -samples123, -samples456)
+  #dat.log = na.omit(datFiltered)
+  #boxplot(dat.log, las = 2, main = 'total protein abundance')
+  
+  ##make a design table
+  cond = as.factor(c(rep('cont',3),
+                    rep('treat',3)))
+  design = model.matrix(~0+cond)
+  colnames(design) = gsub('cond', '', colnames(design))
+  
+  ##make the contrasts
+  x = c('treat-cont')
+  contrast = makeContrasts(contrasts = x, levels = design)
+  fit1 = lmFit(dat.log, design)
+  fit2 = contrasts.fit(fit1, contrasts = contrast)
+  fit3 = eBayes(fit2)
+
+  ##add information about PSM counts
+  forPsm = processedData
+  psm.count.table = data.frame(count = forPsm$n_peptides,
+                               row.names = forPsm$accession)
+  fit3$count = psm.count.table[rownames(fit3$coefficients),'count']
+  fit4 = spectraCounteBayes(fit3)
+  #VarianceBoxplot(fit4, n = 30, main = 'total proteome dataset', xlab = 'psm count')
+  #VarianceScatterplot(fit4, main = 'total proteome dataset')
+  
+  ##extract the data
+  #head(fit4$coefficients)
+  psmAnnotate = dplyr::select(forPsm, accession, gene, n_peptides)
+  valuesAnnotate = dplyr::select(datFiltered, accession, gene, samples123, samples456) %>%
+    dplyr::rename(controlMissingValues = 'samples123',
+                  conditionMissingValues = 'samples456')
+  deqmsResults = tibble(outputResult(fit4, coef_col = 1)) %>%
+    dplyr::rename(accession = 'gene') %>%
+    dplyr::left_join(psmAnnotate) %>%
+    dplyr::left_join(annotationDb) %>%
+    dplyr::left_join(valuesAnnotate)
+  #
+  saveRDS(deqmsResults, paste(baseRepository, '/dataProcessing/dataset_deqms_', conditionsToCompare[i], '-', controlCondition, '.rds', sep = ''))
+  write.table(deqmsResults, paste(baseRepository, '/dataProcessing/dataset_deqms_', conditionsToCompare[i], '-', controlCondition, '.tsv', sep = ''),
+              col.names = TRUE, row.names = FALSE, sep = '\t', quote = FALSE)
+  }
+```

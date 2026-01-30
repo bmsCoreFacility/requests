@@ -24,7 +24,7 @@ I want to set a base directory that we can use for our analysis.
 
 ```{r}
 ##########################################################################################
-baseRepository = 'E:/requests/1164/240909_1164_orbitrapLumos'
+baseRepository = 'E:/requests/1164'
 ```
 
 ## Data processing
@@ -37,12 +37,13 @@ Process the FragPipe data for all of the samples.
 annotationDb = readRDS(paste(baseRepository, '/databases/2024-09-11-reviewed-UP000005640-spikein.fasta_index_trypticPeps.rds',sep=''))
 
 ##read in the protein result file
-sampleList = c('cII3human','cII4_human','cII32_5','cII42_5',
-               'Me3human','Me32_5','Me42_5','Ra3human','Ra4human','Ra32_5','Ra42_5',
+sampleList = c('cII3human','cII4human','cII32_5','cII42_5',
+               'Me3human','Me32_5','Me4human','Me42_5',
+               'Ra3human','Ra4human','Ra32_5','Ra42_5',
                'Re3human','Re4human','Re32_5','Re42_5')
 foldersToProcess = c(paste('sample',sampleList,sep=''))
 for (i in 1:length(foldersToProcess)){
-  proTemp = read_tsv(paste(baseRepository,'/fragpipeFirstPass/',foldersToProcess[i],'/protein.tsv',sep=''), show_col_types = FALSE) %>%
+  proTemp = read_tsv(paste(baseRepository,'/fragpipeSecondPass/',foldersToProcess[i],'/protein.tsv',sep=''), show_col_types = FALSE) %>%
     dplyr::select(`Protein ID`,`Entry Name`, Coverage, `Protein Probability`, `Total Peptides`:`Indistinguishable Proteins`) %>%
     dplyr::rename(accession = 'Protein ID',
                   entry = 'Entry Name',
@@ -67,7 +68,7 @@ for (i in 1:length(foldersToProcess)){
     dplyr::arrange(-iBAQ)
   
   ##save the file
-  write.table(proTemp, paste(baseRepository,'/fragpipeFirstPass/',foldersToProcess[i],'/proteinProcessed.tsv',sep=''),
+  write.table(proTemp, paste(baseRepository,'/fragpipeSecondPass/',foldersToProcess[i],'/proteinProcessed.tsv',sep=''),
             quote = FALSE, sep = '\t', col.names = TRUE, row.names = FALSE)
 }
 

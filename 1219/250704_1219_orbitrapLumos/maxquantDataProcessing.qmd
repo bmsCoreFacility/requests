@@ -1,0 +1,73 @@
+---
+title: "Parsing MQ Data"
+author: "Christopher Hughes"
+format: html
+editor: visual
+---
+
+## Details
+
+This document describes processing a MaxQuant results.
+
+## Setting up the environment
+
+These are packages you will need for this notebook. For exact versions used, please refer to the session info at the bottom of this notebook.
+
+```{r}
+#| message: false
+#| warning: false
+##########################################################################################
+library('tidyverse')
+```
+
+I want to set a base directory that we can use for our analysis.
+
+```{r}
+##########################################################################################
+baseRepository = 'E:/requests/1219/250704_1219_orbitrapLumos'
+```
+
+## Data processing
+
+Process a proteinGroups file from MaxQuant.
+
+```{r}
+##########################################################################################
+##read the proteinGroups file
+pgData = read_tsv(paste(baseRepository,'/combined/txt/proteinGroups.txt',sep=''),
+                  show_col_types = FALSE) %>%
+  dplyr::filter(!grepl('CONT',`Protein IDs`) & !grepl('REV',`Protein IDs`)) %>%
+  dplyr::select(`Protein IDs`,
+                `Protein names`,
+                `Gene names`,
+                `Number of proteins`,
+                Peptides:`Unique peptides`,
+                iBAQ:`MS/MS count`) %>%
+  dplyr::select(-iBAQ, -`MS/MS count`) %>%
+  dplyr::rename('accession' = `Protein IDs`,
+                'description' = `Protein names`,
+                'symbol' = `Gene names`,
+                'numberOfProteins' = `Number of proteins`,
+                'totalPeptides' = Peptides,
+                'razorPeptides' = `Razor + unique peptides`,
+                'uniquePeptides' = `Unique peptides`)
+
+
+##read in your sample annotation data and parse into appropriate column names
+annoData = read_tsv(paste(baseRepository,'/bmsSampleMatrix.txt',sep=''),show_col_types = FALSE)
+mqColumns = tibble('mqNames' = colnames(pgData)[8:(nrow(annoData)+7)]) %>%
+  dplyr::mutate(bmsId = paste('sample',sub('.*_sample(.*)','\\1',mqNames),sep='')) %>%
+  dplyr::left_join(annoData)
+
+##add the column names back to the original data
+colnames(pgData)[8:(nrow(annoData)+7)] = mqColumns$sampleName
+pgDataOrdered = pgData %>%
+  dplyr::relocate(accession:uniquePeptides,paste(annoData$sampleName)) %>%
+  dplyr::arrange(-razorPeptides)
+                                
+                                
+##write the data
+write_tsv(pgDataOrdered, paste(baseRepository,'/combined/txt/parsed_proteinGroups.tsv',sep=''))
+                                
+                                
+```

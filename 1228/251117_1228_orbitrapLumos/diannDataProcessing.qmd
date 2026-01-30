@@ -1,0 +1,71 @@
+---
+title: "diannDataProcessing"
+author: "Christopher Hughes"
+format: html
+editor: visual
+---
+
+## Details
+
+This document describes processing of proteomics data from DIANN to compile a final protein set.
+
+## Setting up the environment
+
+These are packages you will need for this notebook. For exact versions used, please refer to the session info at the bottom of this notebook.
+
+```{r}
+#| message: false
+#| warning: false
+##########################################################################################
+library('tidyverse')
+library('arrow')
+library('iq')
+library('DEqMS')
+library('RColorBrewer')
+library('ggrepel')
+```
+
+I want to set a base directory that we can use as a working space.
+
+```{r}
+##########################################################################################
+baseRepository = 'E:/requests/1228/251117_1228_orbitrapLumos'
+```
+
+## Data processing
+
+Read in data from DIA-NN and process it to filtered sets.
+
+```{r}
+##########################################################################################
+##we are using the data directly from DIA-NN because these were only single injections
+diaData = read_tsv(paste(baseRepository,'/diannDia1/report.pg_matrix.tsv',sep=''),
+                   show_col_types = FALSE) %>%
+  dplyr::filter(!grepl(';',Protein.Group)) %>%
+  dplyr::filter(`N.Proteotypic.Sequences` > 0)
+
+##parse the column names and update in the original tibble
+colNameData = tibble('original' = colnames(diaData)[7:ncol(diaData)]) %>%
+  dplyr::mutate('bmsId' = sub('.*turboId_(.*)_dia1.*','\\1',original),
+                'bmsDate' = sub('.*orbitrapLumos\\\\(.*)_1228.*','\\1',original)) %>%
+  dplyr::select(-original)
+annotationSet = tibble('bmsId' = c(paste('sample',seq(1,18,1),sep=''), paste('sample',seq(1,12,1),sep='')),
+                       'labId' = paste('sample',seq(1,30,1),sep=''),
+                       'bmsDate' = c(rep('250808_1228',6),rep('250905_1228',12),rep('251117_1228',12))) %>%
+  dplyr::left_join(colNameData)
+
+
+colnames(diaData)[7:ncol(diaData)] = annotationSet$labId
+colnames(diaData)[1:6] = c('accession',
+                           'proteinName',
+                           'gene',
+                           'description',
+                           'n_sequences',
+                           'n_proteotypic')
+
+#write the data
+write_tsv(diaData, paste(baseRepository,'/diannDia1/report.pg_matrix.parsed.tsv',sep=''))
+
+```
+
+
