@@ -419,4 +419,3 @@ for (i in 1:length(conditionsToCompare)){
          height = 2, width = 2, useDingbats = FALSE)
 }
 ```
-
