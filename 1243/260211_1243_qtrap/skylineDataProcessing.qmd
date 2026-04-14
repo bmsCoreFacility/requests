@@ -1,0 +1,62 @@
+---
+title: "skylineOutputProcessing"
+author: "Christopher Hughes"
+format: html
+---
+
+## Details
+
+This document describes processing of skyline data from a report export.
+
+## Setting up the environment
+
+These are packages you will need for this notebook. For exact versions used, please refer to the session info at the bottom of this notebook.
+
+```{r}
+#| message: false
+#| warning: false
+##########################################################################################
+library('tidyverse')
+library()
+```
+
+I want to set a base directory that we can use as a working space.
+
+```{r}
+##########################################################################################
+baseRepository = 'E:/requests/1243/260211_1243_qtrap'
+```
+
+## Data processing
+
+Read in data from Skyline and process to a more readable output.
+
+```{r}
+##########################################################################################
+##read in the skyline output
+##set the molecules of interest
+moleculesOfInterest = c('ot82','tyrosine_ilis')
+#
+skyData = read_csv(paste(baseRepository,'/260211_1243_sampleAnalysis_skylineReport.csv',sep=''),
+                   show_col_types = FALSE) %>%
+  dplyr::filter(Molecule %in% moleculesOfInterest) %>%
+  dplyr::select(Molecule, `Product Mz`, `Replicate Name`, Area) %>%
+  dplyr::rename(molecule = Molecule,
+                fragment = `Product Mz`,
+                sampleName = `Replicate Name`,
+                area = Area) %>%
+  dplyr::mutate(moleculeName = paste(molecule,'_',fragment, sep='')) %>%
+  dplyr::select(-molecule, -fragment) %>%
+  dplyr::filter(!grepl('blank', sampleName) & !grepl('ssc', sampleName)) %>%
+  dplyr::mutate(sampleName_edit = ifelse(grepl('\\(', sampleName), gsub(' \\([0-9]\\)', '', sampleName), paste(sampleName,'_rep1',sep=''))) %>%
+  dplyr::mutate(sampleName_edit = ifelse(grepl('rep1',sampleName_edit), sampleName_edit, paste(sampleName_edit,'_rep2',sep=''))) %>%
+  dplyr::mutate(sampleName = sampleName_edit) %>%
+  dplyr::select(-sampleName_edit) %>%
+  tidyr::pivot_wider(id_cols = sampleName, names_from = moleculeName, values_from = area) %>%
+  dplyr::mutate(ot82_frag1_norm = (ot82_300.08 / tyrosine_ilis_145.1)*10000,
+                ot82_frag2_norm = (ot82_272.08 / tyrosine_ilis_145.1)*10000)
+
+#output the data
+write_tsv(skyData, paste(baseRepository, '/260211_1243_sampleAnalysis_skylineReportParsed.tsv',sep=''))
+
+```
