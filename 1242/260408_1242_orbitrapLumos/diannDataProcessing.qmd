@@ -1,0 +1,127 @@
+---
+title: "diannDataProcessing"
+author: "Christopher Hughes"
+format: html
+editor: visual
+---
+
+## Details
+
+This document describes processing of proteomics data from DIANN to compile a final protein set.
+
+## Setting up the environment
+
+These are packages you will need for this notebook. For exact versions used, please refer to the session info at the bottom of this notebook.
+
+```{r}
+#| message: false
+#| warning: false
+##########################################################################################
+library('tidyverse')
+library('arrow')
+library('iq')
+library('DEqMS')
+library('RColorBrewer')
+library('ggrepel')
+```
+
+I want to set a base directory that we can use as a working space.
+
+```{r}
+##########################################################################################
+baseRepository = 'E:/requests/1242/260408_1242_orbitrapLumos'
+```
+
+## Data processing
+
+Read in data from DIA-NN and process with the IQ package.
+
+```{r}
+##########################################################################################
+##first we can filter and parse the report data into a better format for IQ
+##I had to do some extra stuff here because the sample ID was in a bad format
+##if you are using DIA-NN version 1.9 or greater, you need to rename the Fragment.Quant column
+
+#set the number of fractions you acquired
+numberOfFractions = 3
+
+#prefix of the raw data file
+filePrefix = '260408_1242_jb_totalProteome_'
+
+#process the data
+raw = tibble()
+for (i in seq(1,numberOfFractions,1)){
+  dia1 = read_parquet(paste(baseRepository, '/diannDia',i,'/report.parquet',sep=''),) %>%
+    dplyr::mutate(Run = sub(paste('.*',filePrefix,'(.*)_dia[123]',sep=''),'\\1', Run)) %>%
+    #dplyr::filter(!grepl(';', Protein.Group)) %>%
+    dplyr::mutate(fraction = i)
+  #dia1$Intensities = paste(dia1$Fr.0.Quantity, dia1$Fr.1.Quantity, dia1$Fr.2.Quantity, 
+  #                      dia1$Fr.3.Quantity, dia1$Fr.4.Quantity, dia1$Fr.5.Quantity, 
+  #                      dia1$Fr.6.Quantity, dia1$Fr.7.Quantity, dia1$Fr.8.Quantity, 
+  #                      dia1$Fr.9.Quantity, dia1$Fr.10.Quantity, dia1$Fr.11.Quantity, sep = ";")
+  #
+  raw = rbind(raw, dia1)
+}
+
+##save the data
+write.table(raw, paste(baseRepository,'/dataProcessing/combinedFilteredReportAnnotated.tsv',sep=''), 
+            col.names = TRUE, row.names = FALSE, quote = FALSE, sep = '\t')
+
+##run the IQ analysis
+iqResult = process_long_format(paste(baseRepository,'/dataProcessing/combinedFilteredReportAnnotated.tsv',sep=''),
+                           output_filename = paste(baseRepository,'/dataProcessing/combinedFilteredReportAnnotatedIq.tsv',sep=''),
+                           sample_id = "Run",
+                           secondary_id = c("Precursor.Id", "fraction"),
+                           primary_id = "Protein.Group",
+                           intensity_col = "Precursor.Normalised",
+                           intensity_col_sep = NULL,
+                           annotation_col = c("Protein.Ids",
+                                              "Protein.Names", 
+                                              "Genes"),
+                           filter_double_less = c("Q.Value" = "0.01",
+                                                  "PG.Q.Value" = "0.05", 
+                                                  "Lib.Q.Value" = "0.01", 
+                                                  "Lib.PG.Q.Value" = "0.01"),
+                           peptide_extractor = function(x) gsub("[0-9].*$", "", x))
+
+##do the same for the human index
+annotationDb = readRDS(paste(baseRepository, '/databases/2026-04-14-reviewed-UP000005640-spikein.fasta_index_trypticPeps.rds',sep='')) %>%
+  dplyr::select(-species)
+  #dplyr::filter(!grepl('sp\\|V.*',gene))
+
+##parse the IQ result
+proData = read_tsv(paste(baseRepository,'/dataProcessing/combinedFilteredReportAnnotatedIq.tsv',sep=''), show_col_types = FALSE) %>%
+  dplyr::rename(accession = 'Protein.Group') %>%
+  dplyr::mutate(accession = sub('.*\\;','',accession)) %>%
+  dplyr::select(-Genes,-peptides,-XIC) %>%
+  dplyr::left_join(annotationDb) %>%
+  dplyr::filter(!grepl('CONT',accession) & !grepl('\\;',Protein.Names))
+
+##annotate the columns
+annoData = readxl::read_xlsx(paste(baseRepository,'/20260401-1242-Sample_name_correlation.xlsx',sep=''),
+                             col_names = c('bmsId','userId'),
+                             skip = 1)
+
+#annoData = read_tsv(paste(baseRepository,'/bmsSampleMatrix.txt',sep=''),
+#                                  col_names = c('bmsId','userId'),
+#                                  skip = 1) %>%
+#  dplyr::mutate(bmsId = tolower(bmsId))
+#
+
+resultAnno = tibble(bmsId = colnames(proData)[6:(ncol(proData)-5)]) %>%
+  dplyr::left_join(annoData)
+#
+colnames(proData)[6:(ncol(proData)-5)] = resultAnno$userId
+
+##save the data
+saveRDS(proData, paste(baseRepository, '/dataProcessing/parsedProteinData.rds', sep = ''))
+write.table(proData, paste(baseRepository, '/dataProcessing/parsedProteinData.tsv', sep = ''), 
+            col.names = TRUE, row.names = FALSE, quote = FALSE, sep = '\t')
+```
+
+Finished.
+
+```{r}
+sessionInfo()
+```
+
