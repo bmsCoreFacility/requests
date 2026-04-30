@@ -1,0 +1,104 @@
+---
+title: "diannDataProcessing"
+author: "Christopher Hughes"
+format: html
+editor: visual
+---
+
+## Details
+
+This document describes processing of proteomics data from DIANN to compile a final protein set.
+
+## Setting up the environment
+
+These are packages you will need for this notebook. For exact versions used, please refer to the session info at the bottom of this notebook.
+
+```{r}
+#| message: false
+#| warning: false
+##########################################################################################
+library('tidyverse')
+library('readxl')
+library('writexl')
+```
+
+I want to set a base directory that we can use as a working space.
+
+```{r}
+##########################################################################################
+baseRepository = 'E:/requests/1164/comparisons'
+```
+
+## Data processing
+
+Read in the data from Gilles and process the different comparisons of interest.
+
+```{r}
+##########################################################################################
+##define the conditions
+cellLines = c('Me',
+              'Ra',
+              'Re',
+              'cII')
+conditions = c('2_5','human')
+
+##loop through the conditions
+for (i in 1:length(cellLines)){
+  ##define the columns of interest
+  columnsOfInterest = paste(cellLines[i],seq(3,4,1),sep='')
+  ##read in the data
+  ##there is a lot of somewhat useless renaming of things that happens here
+  rawData = readxl::read_xlsx(paste(baseRepository, '/combined_protein.xlsx',sep='')) %>%
+    dplyr::select(Protein:`Combined Unique Spectral Count`,
+                  paste('sample',columnsOfInterest,'human Intensity',sep=''),
+                  paste('sample',columnsOfInterest,'2_5 Intensity',sep='')) %>%
+    dplyr::rename(proteinLong = 'Protein',
+                  accession = `Protein ID`,
+                  uniprot = `Entry Name`,
+                  gene = 'Gene',
+                  proteinLength = `Protein Length`,
+                  organism = 'Organism',
+                  existence = `Protein Existence`,
+                  description = 'Description',
+                  proteinProbability = `Protein Probability`,
+                  topPeptideProbability = `Top Peptide Probability`,
+                  totalPeptides = `Combined Total Peptides`,
+                  spectralCounts = `Combined Spectral Count`,
+                  uniqueSpectralCounts = `Combined Unique Spectral Count`) %>%
+    dplyr::select(-proteinLong,
+                  -proteinLength,
+                  -organism,
+                  -existence,
+                  -proteinProbability,
+                  -topPeptideProbability,
+                  -totalPeptides,
+                  -spectralCounts,
+                  -uniqueSpectralCounts) %>%
+    dplyr::filter(!grepl('CONT', accession))
+  
+  ##count NA values
+  rawData[rawData==0] = NA
+  rawData$control_NAs = rowSums(is.na(rawData[,5:6]))
+  rawData$condition_NAs = rowSums(is.na(rawData[,7:8]))
+  
+  ##filter rows with only NAs
+  rawDataFiltered1 = dplyr::filter(rawData, control_NAs == 0 | condition_NAs == 0)
+  
+  ##calculate overall values
+  processedData = rawDataFiltered1 %>%
+    dplyr::mutate(avg_control = rowMeans(rawDataFiltered1[,5:6],na.rm=TRUE),
+                  avg_condition = rowMeans(rawDataFiltered1[,7:8],na.rm=TRUE)) %>%
+    dplyr::mutate(condition_control_fc = avg_condition/avg_control) %>%
+    dplyr::mutate(log2Fc = log2(condition_control_fc))
+  
+  ##assign a fake value to the missing comparison values
+  processedDataWithMissing = processedData %>%
+    dplyr::mutate(log2Fc = ifelse(condition_NAs == 0 & control_NAs == 2, 10, log2Fc))
+  
+  ##save the data
+  writexl::write_xlsx(processedData, paste(baseRepository,'/dataset_',cellLines[i],'_condition-versus-control.xlsx',sep=''))
+}
+
+
+
+```
