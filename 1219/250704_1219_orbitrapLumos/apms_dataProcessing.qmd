@@ -1,0 +1,235 @@
+---
+title: "Parsing MQ Data"
+author: "Christopher Hughes"
+format: html
+editor: visual
+---
+
+## Details
+
+This document describes processing AP-MS results to get enrichment values. There was some confusion about replicate names, some details from the client here:
+
+-   1 - EV or EV pIC - empty vector or empty vector with poly IC - no problem with those
+-   2 - *-delta (+/- pIC) - this was how Rory labeled the truncated N samples (N*M210) - we believe that for n=2 and 3 you thought this was full-length N (NFL)
+-   3 - FL-delta delta - this was how Rory labeled the NFL samples - we believe that you thought this was N\*M210 for n=2 and n=3
+-   In sum: NFL (aa 1-209 intact) = delta delta N\*M210 (lacking aa 1-209) = \*delta"
+
+## Setting up the environment
+
+These are packages you will need for this notebook. For exact versions used, please refer to the session info at the bottom of this notebook.
+
+```{r}
+#| message: false
+#| warning: false
+##########################################################################################
+library('tidyverse')
+```
+
+I want to set a base directory that we can use for our analysis.
+
+```{r}
+##########################################################################################
+baseRepository = 'E:/requests/1219/250704_1219_orbitrapLumos'
+```
+
+## Data processing
+
+First we want to check the peptide data to make sure the truncation of the protein is being detected as expected. There may be a replicate where peptides belonging to what should be a deleted region are detected.
+
+Process the peptides file from MaxQuant.
+
+```{r}
+##########################################################################################
+##read the peptides file and subset it to only contain peptides before AA position 210 for the bait protein
+pepData = read_tsv(paste(baseRepository,'/combined/txt/peptides.txt',sep=''),
+                  show_col_types = FALSE) %>%
+  dplyr::filter(grepl('P0DTC9', `Leading razor protein`)) %>%
+  dplyr::select(Sequence,
+                `Leading razor protein`,
+                `Start position`,
+                `End position`,
+                Score:Reverse) %>%
+  dplyr::filter(`End position` < 211) %>%
+  dplyr::select(-Score, -Reverse, -Intensity)
+
+##read in your sample annotation data and parse into appropriate column names
+annoData = read_tsv(paste(baseRepository,'/bmsSampleMatrix.txt',sep=''),show_col_types = FALSE)
+mqColumns = tibble('mqNames' = colnames(pepData)[5:(nrow(annoData)+4)]) %>%
+  dplyr::mutate(bmsId = paste('sample',sub('.*_sample(.*)','\\1',mqNames),sep='')) %>%
+  dplyr::left_join(annoData)
+colnames(pepData)[5:(nrow(annoData)+4)] = paste('psm_',mqColumns$sampleName, sep='')
+
+##repeat this for the intensity columns
+annoData = read_tsv(paste(baseRepository,'/bmsSampleMatrix.txt',sep=''),show_col_types = FALSE)
+mqColumns = tibble('mqNames' = colnames(pepData)[23:(nrow(annoData)+22)]) %>%
+  dplyr::mutate(bmsId = paste('sample',sub('.*_sample(.*)','\\1',mqNames),sep='')) %>%
+  dplyr::left_join(annoData)
+colnames(pepData)[23:(nrow(annoData)+22)] = paste('intensity_',mqColumns$sampleName, sep='')
+
+##only the NFL samples should have signal in that first region, so we can get rid of these
+pepDataFiltered = pepData %>%
+  dplyr::select(!contains('N-FL')) 
+
+#save these data
+write.table(pepDataFiltered, paste(baseRepository,'/dataProcessing/dataset_peptideData_maxquant.tsv',sep=''),
+            quote = FALSE, sep = '\t', row.names = FALSE)
+```
+
+Based on the above file, it looks like the samples 'EV_PIC_1' and 'N_M210_PIC_1' both have signal where they shouldn't. So, we will exclude this from the protein summarization.
+
+Process the protein groups file.
+
+```{r}
+##########################################################################################
+##read the proteinGroups file
+pgData = read_tsv(paste(baseRepository,'/combined/txt/proteinGroups.txt',sep=''),
+                  show_col_types = FALSE) %>%
+  dplyr::filter(!grepl('CONT',`Protein IDs`) & !grepl('REV',`Protein IDs`)) %>%
+  dplyr::select(`Protein IDs`,
+                `Protein names`,
+                `Gene names`,
+                `Number of proteins`,
+                Peptides:`Unique peptides`,
+                iBAQ:`MS/MS count`,
+                `Sequence length`) %>%
+  dplyr::select(-iBAQ, -`MS/MS count`) %>%
+  dplyr::rename('originalAccession' = `Protein IDs`,
+                'description' = `Protein names`,
+                'originalSymbol' = `Gene names`,
+                'numberOfProteins' = `Number of proteins`,
+                'totalPeptides' = Peptides,
+                'razorPeptides' = `Razor + unique peptides`,
+                'uniquePeptides' = `Unique peptides`,
+                'length' = `Sequence length`) %>%
+  dplyr::mutate(accession = sub(';.*','',originalAccession),
+                symbol = sub(';.*','',originalSymbol))
+
+
+##read in your sample annotation data and parse into appropriate column names
+annoData = read_tsv(paste(baseRepository,'/bmsSampleMatrix.txt',sep=''),show_col_types = FALSE)
+mqColumns = tibble('mqNames' = colnames(pgData)[8:(nrow(annoData)+7)]) %>%
+  dplyr::mutate(bmsId = paste('sample',sub('.*_sample(.*)','\\1',mqNames),sep='')) %>%
+  dplyr::left_join(annoData)
+colnames(pgData)[8:(nrow(annoData)+7)] = paste('ibaq_',mqColumns$sampleName,sep='')
+
+##repeat the above process for the LFQ columns
+annoData = read_tsv(paste(baseRepository,'/bmsSampleMatrix.txt',sep=''),show_col_types = FALSE)
+mqColumns = tibble('mqNames' = colnames(pgData)[26:(nrow(annoData)+25)]) %>%
+  dplyr::mutate(bmsId = paste('sample',sub('.*_sample(.*)','\\1',mqNames),sep='')) %>%
+  dplyr::left_join(annoData)
+colnames(pgData)[26:(nrow(annoData)+25)] = paste('lfq_',mqColumns$sampleName,sep='')
+
+
+##repeat the above process for the ms/ms count columns
+annoData = read_tsv(paste(baseRepository,'/bmsSampleMatrix.txt',sep=''),show_col_types = FALSE)
+mqColumns = tibble('mqNames' = colnames(pgData)[44:(nrow(annoData)+43)]) %>%
+  dplyr::mutate(bmsId = paste('sample',sub('.*_sample(.*)','\\1',mqNames),sep='')) %>%
+  dplyr::left_join(annoData)
+colnames(pgData)[44:(nrow(annoData)+43)] = paste('msms_',mqColumns$sampleName,sep='')
+
+##remove the two samples that are giving unreliable data
+pgDataFiltered = pgData %>%
+  dplyr::select(!contains('EV_PIC_1')) %>%
+  dplyr::select(!contains('N_M210_PIC_1')) %>%
+  dplyr::arrange(-totalPeptides) %>%
+  dplyr::mutate(description = ifelse(grepl('P0DTC9', accession), 'N protein', description),
+                symbol = ifelse(grepl('P0DTC9', accession), 'N', symbol))
+
+##write the data
+write_tsv(pgDataFiltered, paste(baseRepository,'/dataProcessing/dataset_proteinData_maxquant.tsv',sep=''))
+```
+
+Prepare the data for saint-express analysis.
+
+```{r}
+##########################################################################################
+##read in the protein data
+pgData = read_tsv(paste(baseRepository,'/dataProcessing/dataset_proteinData_maxquant.tsv',sep=''),
+                  show_col_types = FALSE)
+
+
+##create the 'bait' file
+bait = tibble('ipName' = c(paste('EV_',seq(1,3,1),sep=''),
+                           paste('N-FL_',seq(1,3,1),sep='')),
+              'baitName' = c(paste('EV_',seq(1,3,1),sep=''),
+                             rep('N',3)),
+              'testType' = c(rep('C',3),
+                             rep('T',3)))
+
+
+##create the 'prey' file
+#this needs to be unique, so first check for non-unique entries
+pgData[which(duplicated(pgData$symbol)),'symbol']
+pgData[which(duplicated(pgData$accession)),'accession']
+#
+prey = tibble('preyName' = pgData$accession,
+              'preyLength' = pgData$length,
+              'preySymbol' = pgData$symbol)
+
+
+##perform normalization on the IPs of interest
+rawData = pgData %>%
+  dplyr::select(contains(paste('lfq_',bait$ipName[4],sep='')),
+                contains(paste('lfq_',bait$ipName[5],sep='')),
+                contains(paste('lfq_',bait$ipName[6],sep='')))
+intensityTotals = colSums(rawData) #get the total intensity for each sample
+normFactors = intensityTotals / min(intensityTotals) #determine the normalization factor
+#design a new bait matrix with the normalization factors
+baitNorm = bait %>%
+  dplyr::mutate(normFactors = c(rep(1,3),
+                                normFactors))
+
+
+##create the 'interaction' file
+interaction = tibble()
+for (i in 1:length(bait$ipName)){
+  ##
+  tmpData = pgData %>%
+    dplyr::select(accession,
+                  contains(paste('lfq_',bait$ipName[i],sep=''))) %>%
+    dplyr::rename(lfqAbundance = paste('lfq_',bait$ipName[i],sep='')) %>%
+    dplyr::filter(lfqAbundance > 0) %>%
+    dplyr::mutate(lfqAbundance = lfqAbundance / baitNorm$normFactors[i]) %>%
+    dplyr::mutate(lfqAbundance = log2(lfqAbundance)) %>%
+    dplyr::mutate(ipName = bait$ipName[i],
+                  baitName = bait$baitName[i]) %>%
+    dplyr::select(ipName,
+                  baitName,
+                  accession,
+                  lfqAbundance)
+  #
+  interaction = rbind(interaction, tmpData)
+}
+
+##save these files
+write.table(bait, paste(baseRepository,'/dataProcessing/bait.dat',sep=''),
+            row.names = FALSE, col.names = FALSE, quote = FALSE, sep = '\t')
+#
+write.table(prey, paste(baseRepository,'/dataProcessing/prey.dat',sep=''),
+            row.names = FALSE, col.names = FALSE, quote = FALSE, sep = '\t')
+#
+write.table(interaction, paste(baseRepository,'/dataProcessing/interaction.dat',sep=''),
+            row.names = FALSE, col.names = FALSE, quote = FALSE, sep = '\t')
+
+
+##now we need to run saint-express, I did this using the command below
+#/mnt/c/softwareTools/proteomics/saint-express/SAINTexpress_v3.6.3__2018-03-09/SAINTexpress_v3.6.3__2018-03-09/Precompiled_binaries/Linux64$ ./SAINTexpress-int interaction.dat prey.dat bait.dat
+
+##looking at the saint data from above highlighted we likely need some normalization in the IP samples, so I went back to apply this in the interaction file
+#we don't perform normalization on the EV samples
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
